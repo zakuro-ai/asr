@@ -7,6 +7,7 @@ from data import SpectrogramDataset, AudioDataLoader
 from decoders.decoder import GreedyDecoder
 from parsers import add_decoder_args, add_inference_args
 from utils import load_model
+from ascii_graph import Pyasciigraph
 
 parser = argparse.ArgumentParser(description='DeepSpeech transcription')
 parser = add_inference_args(parser)
@@ -25,6 +26,7 @@ def evaluate(test_loader, device, model, decoder, target_decoder, save_output=Fa
     total_cer, total_wer, num_tokens, num_chars = 0, 0, 0, 0
     output_data = []
     min_str, max_str, last_str, min_cer, max_cer = "", "", "", 100, 0
+    hcers = dict([(k, 1) for k in range(11)])
     for i, (data) in enumerate(test_loader):
         inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
@@ -60,6 +62,7 @@ def evaluate(test_loader, device, model, decoder, target_decoder, save_output=Fa
             cer_inst = cer_inst * 100
             wer_inst = min(wer_inst, 100)
             cer_inst = min(cer_inst, 100)
+            hcers[int(cer_inst//10)]+=1
             last_str = f"Ref:{reference.lower()}" \
                        f"\nHyp:{transcript.lower()}" \
                        f"\nWER:{wer_inst}  " \
@@ -73,17 +76,26 @@ def evaluate(test_loader, device, model, decoder, target_decoder, save_output=Fa
             print(last_str) if verbose else None
     wer = float(total_wer) / num_tokens
     cer = float(total_cer) / num_chars
+
+    cers = [(f'{k*10}-{(k*10) + 10}', v-1) for k, v in hcers.items()]
+
+    graph = Pyasciigraph()
+    asciihistogram = "\n|".join(graph.graph('CER histogram', cers))
+
+
     if main_proc:
         with open(output_file, "w") as f:
             f.write("\n".join([
-                "================= WER / CER =================",
+                f"================= {wer*100:.2f}/{cer*100:.2f} =================",
                 "----- BEST -----",
                 min_str,
                 "----- LAST -----",
                 last_str,
                 "----- WORST -----",
                 max_str,
+                asciihistogram,
                 "=============================================\n"
+
             ]))
 
     return wer * 100, cer * 100, output_data

@@ -5,3 +5,4 @@ wget
 librosa
 tqdm
 matplotlib
+ascii_graph
