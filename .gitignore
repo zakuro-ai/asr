@@ -104,6 +104,5 @@ ENV/
 /site
 
 # deepspeech.pytorch-specific dirs
-models/
 data/*.csv
 SeanNaren/data/*_dataset/
