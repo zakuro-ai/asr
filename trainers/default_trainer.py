@@ -5,7 +5,7 @@ class DefaultTrainer:
         self.args = args
         self.net = model.net
         self.main_proc = model._main_proc
-        self.device = 'cuda'#self.net.device
+        self.device = self.net.device
         # Instantiate variables for training
         self.distributed = args.world_size > 1
         self.save_folder = args.save_folder

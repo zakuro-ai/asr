@@ -20,13 +20,21 @@ parser.add_argument('--save-output', default=None, help="Saves output of model f
 parser = add_decoder_args(parser)
 
 
-def evaluate(test_loader, device, model, decoder, target_decoder, save_output=False, verbose=False, half=False,
-             output_file='evaluate.txt', main_proc=True):
+def evaluate(test_loader,
+             device,
+             model,
+             decoder,
+             target_decoder,
+             save_output=False,
+             verbose=False,
+             half=False,
+             output_file='evaluate.txt',
+             main_proc=True):
     model.eval()
     total_cer, total_wer, num_tokens, num_chars = 0, 0, 0, 0
     output_data = []
     min_str, max_str, last_str, min_cer, max_cer = "", "", "", 100, 0
-    hcers = dict([(k, 1) for k in range(11)])
+    hcers = dict([(k, 1) for k in range(10)])
     for i, (data) in enumerate(test_loader):
         inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
@@ -62,7 +70,7 @@ def evaluate(test_loader, device, model, decoder, target_decoder, save_output=Fa
             cer_inst = cer_inst * 100
             wer_inst = min(wer_inst, 100)
             cer_inst = min(cer_inst, 100)
-            hcers[int(cer_inst//10)]+=1
+            hcers[min(int(cer_inst//10), 9)]+=1
             last_str = f"Ref:{reference.lower()}" \
                        f"\nHyp:{transcript.lower()}" \
                        f"\nWER:{wer_inst}  " \

@@ -35,8 +35,8 @@ class ASRTrainer(DefaultTrainer):
     def description(self):
         __description__ = ' | '.join([
             f'{self.manifest} - {timedelta(seconds=int(self.epoch_time))} >> {self.epoch + 1}/{self.epochs} ({self.lu + 1})',
-            f'Loss {self.average_loss():.4f}' if self.average_loss() is not None else '',
             f'Lr {self.optimizer.param_groups[0]["lr"] * 1000:.2f}e-3',
+            f'Loss {self.average_loss():.4f}' if self.average_loss() is not None else '',
             f'WER/CER {self.wer:.2f}/{self.cer:.2f} - ({self.best_wer:.2f}/[{self.best_cer:.2f}])'
             if self.best_cer is not None else ''
         ])

@@ -27,10 +27,9 @@ class DeepSpeechModel:
 
         # Instantiate the network
         self.net = self.continue_from(args) if os.path.exists(args.continue_from) else self.instantiate_network(args)
-        self.net = self.net.to('cuda')
 
         # Distribute
-        self._main_proc = self.distribute(args) if self._distributed else False
+        self._main_proc = self.distribute(args) if self._distributed else True
 
         # Boards
         self._visdom_logger = VisdomLogger(args.id, args.epochs) if self._main_proc and self._visdom else None
@@ -53,6 +52,8 @@ class DeepSpeechModel:
         self.net.decoder = GreedyDecoder(labels)
         self.net.audio_conf = audio_conf
         self.net.labels = labels
+        self.net.device = self.device
+        self.net = self.net.to(self.device)
         return main_proc
 
     def instantiate_network(self, args):
@@ -79,6 +80,8 @@ class DeepSpeechModel:
         self.net.decoder = GreedyDecoder(labels)
         self.net.audio_conf = audio_conf
         self.net.labels = labels
+        self.net.device = self.device
+        self.net = self.net.to(self.device)
         return self.net
 
 
