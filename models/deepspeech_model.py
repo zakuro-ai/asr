@@ -109,8 +109,8 @@ class DeepSpeechModel:
         self._cer = cer_results[self._start_epoch - 1]
         self._wer = wer_results[self._start_epoch - 1]
         self._package = package
-
         self.net.decoder = GreedyDecoder(self.net.labels)
+        self.net.device = self.device
         return self.net
 
     def init_optimizer(self, args):
