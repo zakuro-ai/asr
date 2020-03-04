@@ -102,12 +102,24 @@ class DeepSpeechModel:
         else:
             self._start_iter += 1
         self._avg_loss = int(package.get('avg_loss', 0))
-        self._loss_results, cer_results, wer_results = package['loss_results'], package['cer_results'], \
+        loss_results, cer_results, wer_results = package['loss_results'], package['cer_results'], \
                                                  package['wer_results']
-        self._best_cer = min(cer_results[:self._start_epoch])
-        self._best_wer = min(wer_results[:self._start_epoch])
-        self._cer = cer_results[self._start_epoch - 1]
-        self._wer = wer_results[self._start_epoch - 1]
+        for k, (loss, cer, wer) in enumerate(zip(loss_results, cer_results, wer_results)):
+            try:
+                self._loss_results[k], self._cer_results[k], self._wer_results[k] = loss, cer, wer
+            except IndexError:
+                break
+
+        if self._start_epoch>0:
+            self._best_cer = min(cer_results[:self._start_epoch])
+            self._best_wer = min(wer_results[:self._start_epoch])
+            self._cer = cer_results[self._start_epoch - 1]
+            self._wer = wer_results[self._start_epoch - 1]
+        else:
+            self._best_cer = None
+            self._best_wer = None
+            self._cer = None
+            self._wer = None
         self._package = package
         self.net.decoder = GreedyDecoder(self.net.labels)
         self.net.device = self.device

@@ -1,7 +1,7 @@
 # Byte-compiled / optimized / DLL files
 .deps
 SeanNaren
-__data__/manifests
+__data__/manifest*
 __pycache__/
 *.py[cod]
 *$py.class
