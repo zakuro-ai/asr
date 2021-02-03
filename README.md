@@ -1,9 +1,60 @@
-![alt text](https://github.com/JeanMaximilienCadic/ASRDeepSpeech/blob/master/img/Training-Deep-Speech.png)
+![alt text](img/Training-Deep-Speech.png)
 # ASRDeepspeech (English/Japanese)
 
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
+## Overview
+## ASRDeepspeech modules
+
+At a granular level, synskit is a library that consists of the following components:
+
+| Component | Description |
+| ---- | --- |
+| **asr_deepspeech** | |
+| **asr_deepspeech.data** | |
+| **asr_deepspeech.data.dataset** | |
+| **asr_deepspeech.data.loaders** | |
+| **asr_deepspeech.data.parsers** | |
+| **asr_deepspeech.data.samplers** | |
+| **asr_deepspeech.decoders** | |
+| **asr_deepspeech.loggers** | |
+| **asr_deepspeech.models** | |
+| **asr_deepspeech.modules** | |
+| **asr_deepspeech.parsers** | |
+| **asr_deepspeech.test** | |
+| **asr_deepspeech.trainers** | |
+
+## Installation
+
+## Nvidia Docker Image
+To build the image with docker
+```
+docker build . -t jcadic/asr_deepspeech:latest
+```
+
+## Test the setup
+```
+docker run --rm -it jcadic/asr_deepspeech:latest
+```
+
+You should be able to get an output like
+```
+=1= TEST PASSED : asr_deepspeech
+=1= TEST PASSED : asr_deepspeech.data
+=1= TEST PASSED : asr_deepspeech.data.dataset
+=1= TEST PASSED : asr_deepspeech.data.loaders
+=1= TEST PASSED : asr_deepspeech.data.parsers
+=1= TEST PASSED : asr_deepspeech.data.samplers
+=1= TEST PASSED : asr_deepspeech.decoders
+=1= TEST PASSED : asr_deepspeech.loggers
+=1= TEST PASSED : asr_deepspeech.models
+=1= TEST PASSED : asr_deepspeech.modules
+=1= TEST PASSED : asr_deepspeech.parsers
+=1= TEST PASSED : asr_deepspeech.test
+=1= TEST PASSED : asr_deepspeech.trainers
+
+```
 ## Improvements
 <li> Clean verbose during training 
 

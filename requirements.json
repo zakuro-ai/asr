@@ -1,0 +1,15 @@
+[
+  "gnutools-python",
+  "python-levenshtein",
+  "torch",
+  "visdom",
+  "wget",
+  "librosa",
+  "tqdm",
+  "matplotlib",
+  "ascii_graph",
+  "tensorboardX",
+  "apex @  git+https://github.com/NVIDIA/apex.git",
+  "warpctc_pytorch",
+  "ctcdecode @ git+https://github.com/parlance/ctcdecode.git"
+]
