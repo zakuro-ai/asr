@@ -1,4 +1,8 @@
 [
+  "llvmlite",
+  "audioread",
+  "scipy==1.5.4",
+  "appdirs",
   "gnutools-python",
   "python-levenshtein",
   "torch",
@@ -9,7 +13,7 @@
   "matplotlib",
   "ascii_graph",
   "tensorboardX",
-  "apex @  git+https://github.com/NVIDIA/apex.git",
+  "apex",
   "warpctc_pytorch",
-  "ctcdecode @ git+https://github.com/parlance/ctcdecode.git"
+  "ctcdecode"
 ]

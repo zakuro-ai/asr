@@ -1,14 +1,9 @@
-FROM  jcadic/vanilla:ml
+FROM jcadic/vanilla:deepspeech
 
-LABEL maintainer="Cadic Jean Maximilien <info@cadic.jp>"
-LABEL description="This is a bare-bones example of the asr_deepspeech framework setup."
+COPY . /deepspeech
 
-COPY . /asr_deepspeech
-WORKDIR /asr_deepspeech
+WORKDIR /deepspeech
+
 RUN python setup.py install
-
-WORKDIR /
-
-RUN rm -r /asr_deepspeech
 
 CMD ["python", "-m", "asr_deepspeech.test"]

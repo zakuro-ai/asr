@@ -30,12 +30,12 @@ At a granular level, synskit is a library that consists of the following compone
 ## Nvidia Docker Image
 To build the image with docker
 ```
-docker build . -t jcadic/asr_deepspeech:latest
+docker build . -t jcadic/deepspeech
 ```
 
 ## Test the setup
 ```
-docker run --rm -it jcadic/asr_deepspeech:latest
+docker run --rm --gpus all -it jcadic/deepspeech
 ```
 
 You should be able to get an output like
