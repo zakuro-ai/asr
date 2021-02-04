@@ -26,16 +26,29 @@ At a granular level, synskit is a library that consists of the following compone
 | **asr_deepspeech.trainers** | |
 
 ## Installation
-
-## Nvidia Docker Image
+We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
+ the code. 
+ 
+ If you decide to run the code locally you will need python3.6 with cuda>=10.1.
+#### Docker
 To build the image with docker
 ```
 docker build . -t jcadic/deepspeech
 ```
 
-## Test the setup
+
+#### Local 
+```
+sh setup.sh
+```
+##Test the setup
+#### Docker
 ```
 docker run --rm --gpus all -it jcadic/deepspeech
+```
+#### Local
+```
+python -m asr_deepspeech.test
 ```
 
 You should be able to get an output like
