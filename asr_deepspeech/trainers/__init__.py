@@ -2,7 +2,10 @@ from asr_deepspeech.trainers.deepspeech_trainer import DeepSpeechTrainer
 
 
 if __name__ == '__main__':
-    from warpctc_pytorch import CTCLoss
+    # from warpctc_pytorch import CTCLoss
+
+    from torch.nn import CTCLoss
+
     from asr_deepspeech.parsers import parser, parse_args
     from asr_deepspeech.models import DeepSpeechModel
     from asr_deepspeech.trainers import DeepSpeechTrainer
@@ -23,6 +26,6 @@ if __name__ == '__main__':
     model = DeepSpeechModel(args)
     trainer = DeepSpeechTrainer(model=model,
                                 batch_size=args.batch_size,
-                                criterion=CTCLoss(),
+                                criterion=CTCLoss(reduction="sum"),
                                 args=args)
     trainer.run(epochs=args.epochs)

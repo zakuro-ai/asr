@@ -115,6 +115,7 @@ def load_audio(path):
     return sound
 
 
+
 def _collate_fn(batch):
     def func(p):
         return p[0].size(1)
@@ -139,6 +140,34 @@ def _collate_fn(batch):
         targets.extend(target)
     targets = torch.IntTensor(targets)
     return inputs, targets, input_percentages, target_sizes
+
+#
+# def _collate_fn(batch, C=501):
+#     def func(p):
+#         return p[0].size(1)
+#
+#     batch = sorted(batch, key=lambda sample: sample[0].size(1), reverse=True)
+#     longest_sample = max(batch, key=func)[0]
+#     N = len(batch)
+#     T = longest_sample.size(1)
+#
+#     inputs = torch.zeros(T, N, C)
+#     input_lengths = torch.full(size=(N,), fill_value=T, dtype=torch.long)
+#     # input_percentages = torch.FloatTensor(N)
+#     target_lengths = torch.IntTensor(N)
+#     targets = []
+#     for x in range(N):
+#         sample = batch[x]
+#         tensor, target = sample[0], sample[1]
+#
+#         seq_length = tensor.size(1)
+#         inputs[x][0].narrow(1, 0, seq_length).copy_(tensor)
+#
+#         # input_percentages[x] = seq_length / float(T)
+#         target_lengths[x] = len(target)
+#         targets.extend(target)
+#     targets = torch.IntTensor(targets)
+#     return inputs, targets, input_lengths, target_lengths
 
 
 def get_audio_length(path):

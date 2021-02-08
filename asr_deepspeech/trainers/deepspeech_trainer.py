@@ -9,7 +9,7 @@ from asr_deepspeech import evaluate
 from asr_deepspeech import reduce_tensor, check_loss
 from asr_deepspeech.trainers.asr_trainer import ASRTrainer
 from asr_deepspeech.modules import DeepSpeech
-
+import json
 
 class DeepSpeechTrainer(ASRTrainer):
     def __init__(self, model,batch_size, criterion, args):
@@ -55,9 +55,12 @@ class DeepSpeechTrainer(ASRTrainer):
         # measure data loading time
         inputs = inputs.to('cuda')
 
+
         out, output_sizes = self.net(inputs, input_sizes)
+
         out = out.transpose(0, 1)  # TxNxH
         float_out = out.float()  # ensure float32 for loss
+        float_out = float_out.log_softmax(2)
         loss = self.criterion(float_out, targets, output_sizes, target_sizes).to('cuda')
         loss = loss / inputs.size(0)  # average the loss by minibatch
 
