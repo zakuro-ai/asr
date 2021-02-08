@@ -44,7 +44,7 @@ sh setup.sh
 ##Test the setup
 #### Docker
 ```
-docker run --rm --gpus all -it jcadic/deepspeech
+docker run --gpus all -it  --shm-size=70g  -v /mnt/.cdata:/mnt/.cdata jcadic/deepspeech bash
 ```
 #### Local
 ```
@@ -145,13 +145,9 @@ Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven'
 
 Compile and install the dependencies
 ```
-bash ./setup_dependencies.sh
+bash ./setup.sh
 ```
 
-Install the python requirements
-```
-pip install -r requirements.txt
-```
 
 ## Datasets
 
@@ -160,26 +156,28 @@ Currently supports JSUT. Please contact me if you want to download the preproces
 #### Custom Dataset
 
 To create a custom dataset you must create json files containing the necessary information about the dataset.
-> \_\_data\_\_/manifests/train_jsut.json
+> \_\_data\_\_/manifests/{train/val}_jsut.json
 ```
-{"audio_filepath": "/path/to/audio_train1.wav", "duration": seconds1, "text": "train string content 1"}
-{"audio_filepath": "/path/to/audio_train2.wav", "duration": seconds2, "text": "train string content 2"}
-{"audio_filepath": "/path/to/audio_train3.wav", "duration": seconds3, "text": "train string content 3"}
-...
-```
-> \_\_data\_\_/manifests/test_jsut.json
-```
-{"audio_filepath": "/path/to/audio_test1.wav", "duration": seconds1, "text": "test string content 1"}
-{"audio_filepath": "/path/to/audio_test2.wav", "duration": seconds2, "text": "test string content 2"}
-{"audio_filepath": "/path/to/audio_test3.wav", "duration": seconds3, "text": "test string content 3"}
-...
+{
+    "UT-PARAPHRASE-sent002-phrase1": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
+        "duration": 2.44,
+        "text": "専門には、疎いんだから。"
+    },
+    "UT-PARAPHRASE-sent002-phrase2": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
+        "duration": 2.82,
+        "text": "専門には、詳しくないんだから。"
+    },
+    ...
+}
 ```
 
 ## Training a Model
 
 To train on a single gpu
 ```
-python train.py --manifest [manifest_id] --labels [path_to_labels_json]
+python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
 ```
 To scale to multi-gpu training
 ```
