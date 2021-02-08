@@ -27,7 +27,10 @@ class DeepSpeechModel:
         self._visdom, self._tensorboard = args.visdom, args.tensorboard
 
         # Instantiate the network
-        self.net = self.continue_from(args) if os.path.exists(args.continue_from) else self.instantiate_network(args)
+        if args.continue_from is not None and os.path.exists(args.continue_from):
+            self.net = self.continue_from(args)
+        else:
+            self.net = self.instantiate_network(args)
 
         # Distribute
         self._main_proc = self.distribute(args) if self._distributed else True

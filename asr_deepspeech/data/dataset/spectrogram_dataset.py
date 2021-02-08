@@ -2,7 +2,7 @@ import json
 from torch.utils.data import Dataset
 from asr_deepspeech.data.parsers import SpectrogramParser
 from asr_deepspeech.vars import N
-
+import json
 class SpectrogramDataset(Dataset, SpectrogramParser):
     def __init__(self, audio_conf, manifest_filepath, labels, normalize=False, speed_volume_perturb=False, spec_augment=False):
         """
@@ -19,15 +19,8 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         :param speed_volume_perturb(default False): Apply random tempo and gain perturbations
         :param spec_augment(default False): Apply simple spectral augmentation to mel spectograms
         """
-        with open(manifest_filepath) as f:
-            lines = f.readlines()
-            ids = []
-            for k, line in enumerate(lines):
-                try:
-                    ids.append(json.loads(line))
-                except:
-                    print(manifest_filepath, k, '\n', line)
-                    raise AssertionError
+        data = json.load(open(manifest_filepath, "r"))
+        ids = list(data.values())
         self.ids = ids[:N]
         self.size = len(self.ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
