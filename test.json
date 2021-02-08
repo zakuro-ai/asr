@@ -1,0 +1,14 @@
+{
+    "inputs": [
+        2,
+        1,
+        161,
+        847
+    ],
+    "targets": [
+        17
+    ],
+    "input_percentages.shape": [
+        2
+    ],
+    "input_percentages": 

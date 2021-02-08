@@ -1,9 +1,73 @@
-![alt text](https://github.com/JeanMaximilienCadic/ASRDeepSpeech/blob/master/img/Training-Deep-Speech.png)
+![alt text](img/Training-Deep-Speech.png)
 # ASRDeepspeech (English/Japanese)
 
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
+## Overview
+## ASRDeepspeech modules
+
+At a granular level, synskit is a library that consists of the following components:
+
+| Component | Description |
+| ---- | --- |
+| **asr_deepspeech** | |
+| **asr_deepspeech.data** | |
+| **asr_deepspeech.data.dataset** | |
+| **asr_deepspeech.data.loaders** | |
+| **asr_deepspeech.data.parsers** | |
+| **asr_deepspeech.data.samplers** | |
+| **asr_deepspeech.decoders** | |
+| **asr_deepspeech.loggers** | |
+| **asr_deepspeech.models** | |
+| **asr_deepspeech.modules** | |
+| **asr_deepspeech.parsers** | |
+| **asr_deepspeech.test** | |
+| **asr_deepspeech.trainers** | |
+
+## Installation
+We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
+ the code. 
+ 
+ If you decide to run the code locally you will need python3.6 with cuda>=10.1.
+#### Docker
+To build the image with docker
+```
+docker build . -t jcadic/deepspeech
+```
+
+
+#### Local 
+```
+sh setup.sh
+```
+##Test the setup
+#### Docker
+```
+docker run --gpus all -it  --shm-size=70g  -v /mnt/.cdata:/mnt/.cdata jcadic/deepspeech bash
+```
+#### Local
+```
+python -m asr_deepspeech.test
+```
+
+You should be able to get an output like
+```
+=1= TEST PASSED : asr_deepspeech
+=1= TEST PASSED : asr_deepspeech.data
+=1= TEST PASSED : asr_deepspeech.data.dataset
+=1= TEST PASSED : asr_deepspeech.data.loaders
+=1= TEST PASSED : asr_deepspeech.data.parsers
+=1= TEST PASSED : asr_deepspeech.data.samplers
+=1= TEST PASSED : asr_deepspeech.decoders
+=1= TEST PASSED : asr_deepspeech.loggers
+=1= TEST PASSED : asr_deepspeech.models
+=1= TEST PASSED : asr_deepspeech.modules
+=1= TEST PASSED : asr_deepspeech.parsers
+=1= TEST PASSED : asr_deepspeech.test
+=1= TEST PASSED : asr_deepspeech.trainers
+
+```
 ## Improvements
 <li> Clean verbose during training 
 
@@ -81,13 +145,9 @@ Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven'
 
 Compile and install the dependencies
 ```
-bash ./setup_dependencies.sh
+bash ./setup.sh
 ```
 
-Install the python requirements
-```
-pip install -r requirements.txt
-```
 
 ## Datasets
 
@@ -96,26 +156,28 @@ Currently supports JSUT. Please contact me if you want to download the preproces
 #### Custom Dataset
 
 To create a custom dataset you must create json files containing the necessary information about the dataset.
-> \_\_data\_\_/manifests/train_jsut.json
+> \_\_data\_\_/manifests/{train/val}_jsut.json
 ```
-{"audio_filepath": "/path/to/audio_train1.wav", "duration": seconds1, "text": "train string content 1"}
-{"audio_filepath": "/path/to/audio_train2.wav", "duration": seconds2, "text": "train string content 2"}
-{"audio_filepath": "/path/to/audio_train3.wav", "duration": seconds3, "text": "train string content 3"}
-...
-```
-> \_\_data\_\_/manifests/test_jsut.json
-```
-{"audio_filepath": "/path/to/audio_test1.wav", "duration": seconds1, "text": "test string content 1"}
-{"audio_filepath": "/path/to/audio_test2.wav", "duration": seconds2, "text": "test string content 2"}
-{"audio_filepath": "/path/to/audio_test3.wav", "duration": seconds3, "text": "test string content 3"}
-...
+{
+    "UT-PARAPHRASE-sent002-phrase1": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
+        "duration": 2.44,
+        "text": "専門には、疎いんだから。"
+    },
+    "UT-PARAPHRASE-sent002-phrase2": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
+        "duration": 2.82,
+        "text": "専門には、詳しくないんだから。"
+    },
+    ...
+}
 ```
 
 ## Training a Model
 
 To train on a single gpu
 ```
-python train.py --manifest [manifest_id] --labels [path_to_labels_json]
+python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
 ```
 To scale to multi-gpu training
 ```
