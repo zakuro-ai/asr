@@ -11,19 +11,19 @@ At a granular level, synskit is a library that consists of the following compone
 
 | Component | Description |
 | ---- | --- |
-| **asr_deepspeech** | |
-| **asr_deepspeech.data** | |
-| **asr_deepspeech.data.dataset** | |
-| **asr_deepspeech.data.loaders** | |
-| **asr_deepspeech.data.parsers** | |
-| **asr_deepspeech.data.samplers** | |
-| **asr_deepspeech.decoders** | |
-| **asr_deepspeech.loggers** | |
-| **asr_deepspeech.models** | |
-| **asr_deepspeech.modules** | |
-| **asr_deepspeech.parsers** | |
-| **asr_deepspeech.test** | |
-| **asr_deepspeech.trainers** | |
+| **asr_deepspeech** | Speech Recognition package|
+| **asr_deepspeech.data** | Data relateed module|
+| **asr_deepspeech.data.dataset** | Build the dataset|
+| **asr_deepspeech.data.loaders** | Load the dataet|
+| **asr_deepspeech.data.parsers** | Parse the dataset|
+| **asr_deepspeech.data.samplers** | Sample the dataset|
+| **asr_deepspeech.decoders** | Decode the generated text |
+| **asr_deepspeech.loggers** | Loggers |
+| **asr_deepspeech.models** | Models architecture |
+| **asr_deepspeech.modules** | Components of the network|
+| **asr_deepspeech.parsers** | Arguments parser|
+| **asr_deepspeech.test** | Test units|
+| **asr_deepspeech.trainers** | Trainers |
 
 ## Installation
 We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
