@@ -28,26 +28,22 @@ At a granular level, synskit is a library that consists of the following compone
 ## Installation
 We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
  the code. 
- 
- If you decide to run the code locally you will need python3.6 with cuda>=10.1.
+If you decide to run the code locally you will need python3.6 with cuda>=10.1.
+Several libraries are needed to be installed for training to work. I will assume that everything is being installed in
+an Anaconda installation on Ubuntu, with Pytorch 1.0.
+Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
+
 #### Docker
 To build the image with docker
 ```
 docker build . -t jcadic/deepspeech
+docker run --gpus all -it  --shm-size=70g  -v /mnt/.cdata:/mnt/.cdata jcadic/deepspeech bash
 ```
 
 
 #### Local 
 ```
 sh setup.sh
-```
-##Test the setup
-#### Docker
-```
-docker run --gpus all -it  --shm-size=70g  -v /mnt/.cdata:/mnt/.cdata jcadic/deepspeech bash
-```
-#### Local
-```
 python -m asr_deepspeech.test
 ```
 
@@ -66,8 +62,45 @@ You should be able to get an output like
 =1= TEST PASSED : asr_deepspeech.parsers
 =1= TEST PASSED : asr_deepspeech.test
 =1= TEST PASSED : asr_deepspeech.trainers
-
 ```
+
+## Datasets
+
+Currently supports JSUT. Please contact me if you want to download the preprocessed files and jp_labels.json.
+```
+wget http://ss-takashi.sakura.ne.jp/corpus/jsut_ver1.1.zip
+```
+#### Custom Dataset
+
+To create a custom dataset you must create json files containing the necessary information about the dataset. `__data__/manifests/{train/val}_jsut.json`
+```
+{
+    "UT-PARAPHRASE-sent002-phrase1": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
+        "duration": 2.44,
+        "text": "専門には、疎いんだから。"
+    },
+    "UT-PARAPHRASE-sent002-phrase2": {
+        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
+        "duration": 2.82,
+        "text": "専門には、詳しくないんだから。"
+    },
+    ...
+}
+```
+
+## Training a Model
+
+To train on a single gpu
+```
+python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
+```
+To scale to multi-gpu training
+```
+python -m multiproc train.py --manifest [manifest_id] --labels [path_to_labels_json]             
+```
+
+
 ## Improvements
 <li> Clean verbose during training 
 
@@ -129,60 +162,8 @@ CER histogram
 |██████                                                              26  90-100
 |████████████████████                                                78  100-110
 =============================================
-
 ```
 
-
-
-## Installation
-
-### From Source
-
-Several libraries are needed to be installed for training to work. I will assume that everything is being installed in
-an Anaconda installation on Ubuntu, with Pytorch 1.0.
-
-Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
-
-Compile and install the dependencies
-```
-bash ./setup.sh
-```
-
-
-## Datasets
-
-Currently supports JSUT. Please contact me if you want to download the preprocessed files and jp_labels.json.
-
-#### Custom Dataset
-
-To create a custom dataset you must create json files containing the necessary information about the dataset.
-> \_\_data\_\_/manifests/{train/val}_jsut.json
-```
-{
-    "UT-PARAPHRASE-sent002-phrase1": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
-        "duration": 2.44,
-        "text": "専門には、疎いんだから。"
-    },
-    "UT-PARAPHRASE-sent002-phrase2": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
-        "duration": 2.82,
-        "text": "専門には、詳しくないんだから。"
-    },
-    ...
-}
-```
-
-## Training a Model
-
-To train on a single gpu
-```
-python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
-```
-To scale to multi-gpu training
-```
-python -m multiproc train.py --manifest [manifest_id] --labels [path_to_labels_json]             
-```
 
 ## Acknowledgements
 
