@@ -96,8 +96,8 @@ def parse_args(parser):
         args.continue_from = None
     else:
         args.continue_from = args.continue_from if args.continue_from is not None else args.model_path
-    args.train_manifest = f'{args.root_manifest}/train_{args.manifest}.json'
-    args.val_manifest = f'{args.root_manifest}/val_{args.manifest}.json'
+    args.train_manifest = f'{args.root_manifest}/{args.manifest}-train.json'
+    args.val_manifest = f'{args.root_manifest}/{args.manifest}-val.json'
     # Set seeds for determinism
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
