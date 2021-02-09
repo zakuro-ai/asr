@@ -12,7 +12,7 @@ At a granular level, synskit is a library that consists of the following compone
 | Component | Description |
 | ---- | --- |
 | **asr_deepspeech** | Speech Recognition package|
-| **asr_deepspeech.data** | Data relateed module|
+| **asr_deepspeech.data** | Data related module|
 | **asr_deepspeech.data.dataset** | Build the dataset|
 | **asr_deepspeech.data.loaders** | Load the dataet|
 | **asr_deepspeech.data.parsers** | Parse the dataset|
