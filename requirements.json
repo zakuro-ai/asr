@@ -3,7 +3,7 @@
   "audioread",
   "scipy==1.5.4",
   "appdirs",
-  "gnutools-python",
+  "gnutools-python==2.0a1",
   "python-levenshtein",
   "torch",
   "visdom",
@@ -14,6 +14,5 @@
   "ascii_graph",
   "tensorboardX",
   "apex",
-  "warpctc_pytorch",
   "ctcdecode"
 ]
