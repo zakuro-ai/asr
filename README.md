@@ -7,7 +7,7 @@ components (eg trainers, models, loggers...).
 ## Overview
 ## ASRDeepspeech modules
 
-At a granular level, synskit is a library that consists of the following components:
+At a granular level, ASRDeepSpeech is a library that consists of the following components:
 
 | Component | Description |
 | ---- | --- |
