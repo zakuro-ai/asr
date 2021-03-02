@@ -13,7 +13,7 @@ setup(
     license='MIT Licence',
     author='CADIC Jean-Maximilien',
     python_requires='>=3.6',
-    install_requires=json.load(open("requirements.json", "r")),
+    install_requires=[r.rsplit() for r in (open("requirements.txt", "r"))],
     author_email='info@cadic.jp',
     description='ASRDeepspeech (English / Japanese)',
     platforms="linux_debian_10_x86_64",
