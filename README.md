@@ -36,10 +36,10 @@ Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven'
 #### Docker
 To build the image with docker
 ```
-docker build . -t jcadic/deepspeech
-docker rmi -f jcadic/vanilla:deepspeech
-docker rmi -f jcadic/deepspeech
-docker build . -t jcadic/deepspeech
+docker build . -t jmcadic/deepspeech
+docker rmi -f jmcadic/vanilla:deepspeech
+docker rmi -f jmcadic/deepspeech
+docker build . -t jmcadic/deepspeech
 docker run \
   --rm \
   --gpus all \
@@ -47,7 +47,7 @@ docker run \
   --shm-size=70g \
   -v /mnt/.cdata:/mnt/.cdata \
   -v $(pwd)/data/models:/deepspeech/data/models \
-  jcadic/deepspeech \
+  jmcadic/deepspeech \
   python -m asr_deepspeech.trainers --batch-size 50
 ```
 
