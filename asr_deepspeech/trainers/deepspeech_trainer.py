@@ -197,3 +197,4 @@ class DeepSpeechTrainer(ASRTrainer):
                                         cer_results=self.cer_results,
                                         avg_loss=avg_loss),
                    file_path)
+

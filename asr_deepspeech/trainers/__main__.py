@@ -5,8 +5,6 @@ from asr_deepspeech.trainers import DeepSpeechTrainer
 
 
 if __name__ == '__main__':
-
-
     # Arguments related to the training
     parser.add_argument('--batch-size', default=15, type=int, help='Batch size for training')
     parser.add_argument('--labels-path', default="__data__/labels/labels_jsut_ids_4_5_mini500.json", help='Contains all characters for transcription')

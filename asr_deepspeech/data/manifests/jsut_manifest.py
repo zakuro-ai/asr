@@ -3,7 +3,7 @@ import wave
 import contextlib
 from tqdm import tqdm
 import json
-
+from asr_deepspeech.audio import duration
 class JSUTManifest(dict):
     def __init__(self, root):
         super(JSUTManifest, self).__init__()
@@ -23,18 +23,12 @@ class JSUTManifest(dict):
         for id, text in tqdm(dtext.items(), total=len(dtext), desc="Building the manifest"):
             d = {
                 "audio_filepath": daudio[id],
-                "duration": self.__duration(daudio[id]),
+                "duration": duration(daudio[id]),
                 "text": dtext[id]
             }
             self.__labels = self.__labels.union(set(dtext[id]))
             self.setdefault(id, d)
 
-    def __duration(self, path):
-        with contextlib.closing(wave.open(path, 'r')) as f:
-            frames = f.getnframes()
-            rate = f.getframerate()
-            duration = frames / float(rate)
-            return duration
 
     def export(self, manifest, labels=None):
         json.dump(self, open(manifest, "w"), indent=4, ensure_ascii=False)
