@@ -14,3 +14,4 @@ ascii_graph
 tensorboardX
 apex
 ctcdecode
+numba

@@ -1,0 +1,62 @@
+{
+    "UT-PARAPHRASE-sent097-phrase2": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent097-phrase2.wav",
+        "duration": 2.42,
+        "text": "しかしなくすわけにはいかない"
+    },
+    "TRAVEL1000_0061": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0061.wav",
+        "duration": 2.42,
+        "text": "どこからシャトルバスは出ますか"
+    },
+    "TRAVEL1000_0324": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0324.wav",
+        "duration": 2.51,
+        "text": "それにつけるものがありますので"
+    },
+    "TRAVEL1000_0340": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0340.wav",
+        "duration": 2.9,
+        "text": "あなたのことはいろいろうかがっております"
+    },
+    "TRAVEL1000_0589": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0589.wav",
+        "duration": 2.83,
+        "text": "それでここでリラックスしていてください"
+    },
+    "TRAVEL1000_0865": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0865.wav",
+        "duration": 2.47,
+        "text": "ここにコートを入れてもいいですか"
+    },
+    "TRAVEL1000_0868": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0868.wav",
+        "duration": 2.35,
+        "text": "時間はどのくらいかかりますか"
+    },
+    "TRAVEL1000_0881": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0881.wav",
+        "duration": 3.03,
+        "text": "すみませんがプールはどこにありますか"
+    },
+    "TRAVEL1000_0934": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0934.wav",
+        "duration": 2.4,
+        "text": "タクシーで行かなければなりません"
+    },
+    "TRAVEL1000_0938": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/travel1000/wav/TRAVEL1000_0938.wav",
+        "duration": 3.2,
+        "text": "ええっともう行かなければなりません"
+    },
+    "BASIC5000_1659": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/basic5000/wav/BASIC5000_1659.wav",
+        "duration": 2.81,
+        "text": "スタッフの人たちともうまくいっています"
+    },
+    "BASIC5000_1748": {
+        "audio_filepath": "/srv/sync/cdata/ASR/ja/processed/CLEAN/JSUT/jsut_ver1.1/basic5000/wav/BASIC5000_1748.wav",
+        "duration": 2.56,
+        "text": "彼とうまくやっていくことはできない"
+    }
+}

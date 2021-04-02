@@ -105,6 +105,7 @@ def evaluate(test_loader,
 
 def load_audio(path):
     sample_rate, sound = read(path)
+    assert sample_rate==16000
     sound = sound.astype('float32') / 32767  # normalize audio
     #sound = sound.astype('float32') / sample_rate  # normalize audio
     if len(sound.shape) > 1:

@@ -1,4 +1,6 @@
-FROM jcadic/vanilla:deepspeech
+FROM jmcadic/vanilla:deepspeech
+
+RUN apt install ffmpeg sox -y
 
 COPY requirements.txt /tmp
 WORKDIR /tmp
