@@ -4,7 +4,7 @@ import argparse
 import torch
 import os
 parser = argparse.ArgumentParser(description='DeepSpeech training')
-parser.add_argument('--checkpoint', action='store_true', help='Enables checkpoint saving of model')
+# parser.add_argument('--checkpoint', action='store_true', help='Enables checkpoint saving of model')
 parser.add_argument('--sample-rate', default=16000, type=int, help='Sample rate')
 parser.add_argument('--num-workers', default=32, type=int, help='Number of workers used in data-loading')
 parser.add_argument('--window-size', default=.02, type=float, help='Window size for spectrogram in seconds')
@@ -62,7 +62,6 @@ parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', default=1,
                     help='Loss scaling used by Apex. Default is 1 due to warp-ctc not supporting scaling of gradients')
 parser.add_argument('--train-manifest', metavar='DIR', help='path to train manifest csv')
-parser.add_argument('--val-manifest', metavar='DIR', help='path to validation manifest csv')
 
 def add_decoder_args(parser):
     beam_args = parser.add_argument_group("Beam Decode Options",
@@ -91,21 +90,28 @@ def add_inference_args(parser):
                         help='Path to model file created by training')
     return parser
 
-def parse_args(parser):
-    args = parser.parse_args()
-    args.model_path = f'{args.save_folder}/deepspeech_jp_500_{args.manifest}.pth'
-    args.output_file = f'{args.save_folder}/deepspeech_jp_500_{args.manifest}.txt'
-    if args.overwrite:
-        args.continue_from = None
+def parse_kwargs(parser):
+    kwargs = vars(parser.parse_args())
+    if not "model_path" in kwargs:
+        kwargs["model_path"] = f'{kwargs["save_folder"]}/deepspeech_jp_500_{kwargs.manifest}.pth'
+    if not "output_file" in kwargs:
+        if "save_folder" in kwargs:
+            if os.path.exists(kwargs["save_folder"]):
+                kwargs["output_file"] = f'{kwargs["save_folder"]}/deepspeech_jp_500_{kwargs["manifest"]}.txt'
+    if "overwrite" in kwargs:
+        kwargs["continue_from"] = None
     else:
-        args.continue_from = args.continue_from if args.continue_from is not None else args.model_path
-    args.train_manifest = f'{args.root_manifest}/{args.manifest}-train.json'
-    args.val_manifest = f'{args.root_manifest}/{args.manifest}-val.json'
+        if "continue_from" in kwargs:
+            kwargs["continue_from"] = kwargs["continue_from"] if os.path.exists(kwargs["continue_from"]) else kwargs["model_path"]
+    if not "train_manifest" in kwargs:
+        kwargs["train_manifest"] = f'{kwargs["root_manifest"]}/{kwargs["manifest"]}-train.json'
+    if not "val_manifest" in kwargs:
+        kwargs["val_manifest"] = f'{kwargs["root_manifest"]}/{kwargs["manifest"]}-val.json'
     # Set seeds for determinism
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-    return args
+    torch.manual_seed(kwargs["seed"])
+    torch.cuda.manual_seed_all(kwargs["seed"])
+    np.random.seed(kwargs["seed"])
+    random.seed(kwargs["seed"])
+    return kwargs
 
 

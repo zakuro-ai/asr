@@ -7,7 +7,6 @@
     "asr_deepspeech.data.samplers",
     "asr_deepspeech.decoders",
     "asr_deepspeech.loggers",
-    "asr_deepspeech.models",
     "asr_deepspeech.modules",
     "asr_deepspeech.parsers",
     "asr_deepspeech.trainers"

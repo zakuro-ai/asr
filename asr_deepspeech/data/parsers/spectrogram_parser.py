@@ -3,8 +3,7 @@ import numpy as np
 import torch
 from asr_deepspeech.data.parsers import AudioParser
 from asr_deepspeech.data import NoiseInjection
-from asr_deepspeech import load_audio, load_randomly_augmented_audio
-from asr_deepspeech.vars import windows
+from asr_deepspeech.audio import load_audio, load_randomly_augmented_audio
 
 class SpectrogramParser(AudioParser):
     def __init__(self, audio_conf, normalize=False, speed_volume_perturb=False, spec_augment=False):
@@ -16,17 +15,16 @@ class SpectrogramParser(AudioParser):
         :param spec_augment(default False): Apply simple spectral augmentation to mel spectograms
         """
         super(SpectrogramParser, self).__init__()
-        self.window_stride = audio_conf['window_stride']
-        self.window_size = audio_conf['window_size']
-        self.sample_rate = audio_conf['sample_rate']
-        self.window = windows.get(audio_conf['window'], windows['hamming'])
+        self.window_stride = audio_conf.window_stride
+        self.window_size = audio_conf.window_size
+        self.sample_rate = audio_conf.sample_rate
+        self.window = audio_conf.window
         self.normalize = normalize
         self.speed_volume_perturb = speed_volume_perturb
         self.spec_augment = spec_augment
-        self.noiseInjector = NoiseInjection(audio_conf['noise_dir'], self.sample_rate,
-                                            audio_conf['noise_levels']) if audio_conf.get(
-            'noise_dir') is not None else None
-        self.noise_prob = audio_conf.get('noise_prob')
+        self.noiseInjector = NoiseInjection(audio_conf.noise_dir, self.sample_rate,
+                                            audio_conf.noise_levels) if audio_conf.noise_dir is not None else None
+        self.noise_prob = audio_conf.noise_prob
 
     def parse_audio(self, audio_path):
         if self.speed_volume_perturb:
