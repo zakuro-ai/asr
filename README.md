@@ -4,6 +4,8 @@
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
+I have added a configuration the manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
+
 ## Overview
 ## ASRDeepspeech modules
 
@@ -19,7 +21,6 @@ At a granular level, ASRDeepSpeech is a library that consists of the following c
 | **asr_deepspeech.data.samplers** | Sample the dataset|
 | **asr_deepspeech.decoders** | Decode the generated text |
 | **asr_deepspeech.loggers** | Loggers |
-| **asr_deepspeech.models** | Models architecture |
 | **asr_deepspeech.modules** | Components of the network|
 | **asr_deepspeech.parsers** | Arguments parser|
 | **asr_deepspeech.test** | Test units|
@@ -68,7 +69,6 @@ You should be able to get an output like
 =1= TEST PASSED : asr_deepspeech.data.samplers
 =1= TEST PASSED : asr_deepspeech.decoders
 =1= TEST PASSED : asr_deepspeech.loggers
-=1= TEST PASSED : asr_deepspeech.models
 =1= TEST PASSED : asr_deepspeech.modules
 =1= TEST PASSED : asr_deepspeech.parsers
 =1= TEST PASSED : asr_deepspeech.test
@@ -104,11 +104,14 @@ To create a custom dataset you must create json files containing the necessary i
 
 To train on a single gpu
 ```
-python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
+python -m asr_deepspeech.trainers
 ```
-To scale to multi-gpu training
+
+## Pretrained model
+Uncompress the model in `checkpoint/jp_800_5` and test it using this command.
+This will load the config.yml file and load the manifest `test.json`.  
 ```
-python -m multiproc train.py --manifest [manifest_id] --labels [path_to_labels_json]             
+python -m asr_deepspeech
 ```
 
 
@@ -146,32 +149,31 @@ clean - 0:00:50 >> 7/1000 (5) | Loss 97.2341 | Lr 0.28e-3 | WER/CER 98.35/98.35 
 <li> Separated text file to check wer/cer with histogram on CER values (best/last/worst result)
 
 ```
-================= 43.52/43.55 =================
+================= 100.00/34.49 =================
 ----- BEST -----
-Ref:や さ し い ほ し は こ た え ま し た
-Hyp:や さ し い ほ し は こ た え ま し た
-WER:0.0  - CER:0.0
+Ref:良ある人ならそんな風にに話しかけないだろう
+Hyp:用ある人ならそんな風にに話しかけないだろう
+WER:100.0  - CER:4.761904761904762
 ----- LAST -----
-Ref:そ れ を 開 き
-Hyp:そ れ け
-WER:60.0  - CER:60.0
+Ref:すみませんがオースチンさんは5日にはです
+Hyp:すみませんがースンさんは一つかにはです
+WER:100.0  - CER:25.0
 ----- WORST -----
-Ref:サ ル ト サ ム ラ イ
-Hyp:死 る と さ む ら い
-WER:100.0  - CER:100.0
+Ref:小切には内がみられる
+Hyp:コには内先金地つ作みが見られる
+WER:100.0  - CER:90.0
 CER histogram
 |###############################################################################
-|█████████████████████████████████████                              144  0-10
-|███████████████████████████████████████████████████████            212  10-20
-|█████████████████████████████████████████████████████████████████  249  20-30
-|█████████████████████████████████████████████████████████          222  30-40
-|███████████████████████████████████████████                        168  40-50
-|████████████████████████████████████████████████████               203  50-60
-|███████████████████████████████████████████                        167  60-70
-|████████████████████████████████                                   126  70-80
-|████████████████████████████                                       110  80-90
-|██████                                                              26  90-100
-|████████████████████                                                78  100-110
+|███████████                                                           6  0-10  
+|███████████████████████████                                          15  10-20 
+|███████████████████████████████████████████████████████████████████  36  20-30 
+|█████████████████████████████████████████████████████████████████    35  30-40 
+|██████████████████████████████████████████████████                   27  40-50 
+|█████████████████████████████                                        16  50-60 
+|█████████                                                             5  60-70 
+|███████████                                                           6  70-80 
+|                                                                      0  80-90 
+|█                                                                     1  90-100
 =============================================
 ```
 

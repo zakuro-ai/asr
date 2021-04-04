@@ -1,4 +1,4 @@
-llvmlite==0.35.0
+llvmlite==0.36.0
 audioread
 scipy==1.5.4
 appdirs
@@ -15,3 +15,4 @@ tensorboardX
 apex
 ctcdecode
 numba
+PyYaml

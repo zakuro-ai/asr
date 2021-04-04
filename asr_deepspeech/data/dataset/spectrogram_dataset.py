@@ -1,10 +1,16 @@
-import json
 from torch.utils.data import Dataset
 from asr_deepspeech.data.parsers import SpectrogramParser
-from asr_deepspeech.vars import N
 import json
+from tqdm import tqdm
+
+
 class SpectrogramDataset(Dataset, SpectrogramParser):
-    def __init__(self, audio_conf, manifest_filepath, labels, normalize=False, speed_volume_perturb=False, spec_augment=False):
+    def __init__(self,
+                 audio_conf,
+                 manifest_filepath,
+                 labels,
+                 normalize=False,
+                 spec_augment=False):
         """
         Dataset that loads tensors via a csv containing file paths to audio files and transcripts separated by
         a comma. Each new line is a different sample. Example below:
@@ -19,19 +25,19 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         :param speed_volume_perturb(default False): Apply random tempo and gain perturbations
         :param spec_augment(default False): Apply simple spectral augmentation to mel spectograms
         """
-        data = json.load(open(manifest_filepath, "r"))
+        data = dict([(k, v) for k, v in json.load(open(manifest_filepath, "r")).items()])
         ids = list(data.values())
-        self.ids = ids[:N]
+        self.ids = ids
         self.size = len(self.ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
-        super(SpectrogramDataset, self).__init__(audio_conf, normalize, speed_volume_perturb, spec_augment)
+        super(SpectrogramDataset, self).__init__(audio_conf, normalize, audio_conf.speed_volume_perturb, spec_augment)
+        self.specs = dict([(v["audio_filepath"], self.parse_audio(v["audio_filepath"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])
+        self.transcripts = dict([(v["text"], self.parse_transcript(transcript=v["text"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading transcripts")])
 
     def __getitem__(self, index):
         sample = self.ids[index]
         audio_path, transcript = sample["audio_filepath"], sample["text"]
-        spect = self.parse_audio(audio_path)
-        transcript = self.parse_transcript(transcript=transcript)
-        return spect, transcript
+        return self.specs[audio_path], self.transcripts[transcript]
 
     def parse_transcript(self, transcript):
         transcript = transcript.replace('\n', '')

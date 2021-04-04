@@ -3,7 +3,7 @@ import json
 
 setup(
     name="asr_deepspeech",
-    version="1.0a1",
+    version="0.1.0",
     short_description="ASRDeepspeech (English / Japanese)",
     long_description="ASRDeepspeech (English / Japanese)",
     packages=json.load(open("packages.json", "r")),

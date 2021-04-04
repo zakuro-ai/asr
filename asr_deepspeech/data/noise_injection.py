@@ -1,7 +1,7 @@
 import os
 import librosa
 import numpy as np
-from asr_deepspeech import get_audio_length, audio_with_sox
+from asr_deepspeech.audio import get_audio_length, audio_with_sox
 
 
 class NoiseInjection(object):
