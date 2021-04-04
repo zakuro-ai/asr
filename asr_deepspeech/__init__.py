@@ -1,4 +1,4 @@
-__version__="1.0a"
+__version__="0.1.0"
 
 from .functional import *
-from .vars import *
+from asr_deepspeech.modules import DeepSpeech

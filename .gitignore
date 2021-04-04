@@ -1,3 +1,7 @@
+*.pth
+*.syncthing
+*.tmp
+*.save
 # Byte-compiled / optimized / DLL files
 etc
 data/models
