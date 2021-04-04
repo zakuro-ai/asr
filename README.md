@@ -4,7 +4,7 @@
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
-I have added a configuration the manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
+I have added a configuration file to manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
 
 ## Overview
 ## ASRDeepspeech modules
