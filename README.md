@@ -35,32 +35,30 @@ an Anaconda installation on Ubuntu, with Pytorch 1.0.
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
 #### Docker
-To build the image with docker
-```
-docker build . -t jmcadic/deepspeech
-docker rmi -f jmcadic/vanilla:deepspeech
+To build the image with docker, download the pretrained model in japanese and check the `WER/CER` on JSUT test set.
+```Dockerfile
 docker rmi -f jmcadic/deepspeech
 docker build . -t jmcadic/deepspeech
 docker run \
   --rm \
-  --gpus all \
-  -d \
+  --gpus "device=1" \
+  -it \
   --shm-size=70g \
-  -v /mnt/.cdata:/mnt/.cdata \
-  -v $(pwd)/data/models:/deepspeech/data/models \
-  jmcadic/deepspeech \
-  python -m asr_deepspeech.trainers --batch-size 50
+  -v $(pwd):/workspace \
+  -v /srv/sync/:/srv/sync \
+  -v $HOME/.zakuro:/root/.zakuro \
+   jmcadic/deepspeech  python -m asr_deepspeech
 ```
 
 
 #### Local 
-```
+```bash
 sh setup.sh
 python -m asr_deepspeech.test
 ```
 
 You should be able to get an output like
-```
+```python
 =1= TEST PASSED : asr_deepspeech
 =1= TEST PASSED : asr_deepspeech.data
 =1= TEST PASSED : asr_deepspeech.data.dataset
@@ -78,13 +76,13 @@ You should be able to get an output like
 ## Datasets
 
 Currently supports JSUT. Please contact me if you want to download the preprocessed files and jp_labels.json.
-```
+```bash
 wget http://ss-takashi.sakura.ne.jp/corpus/jsut_ver1.1.zip
 ```
 #### Custom Dataset
 
 To create a custom dataset you must create json files containing the necessary information about the dataset. `__data__/manifests/{train/val}_jsut.json`
-```
+```json
 {
     "UT-PARAPHRASE-sent002-phrase1": {
         "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
@@ -103,14 +101,13 @@ To create a custom dataset you must create json files containing the necessary i
 ## Training a Model
 
 To train on a single gpu
-```
+```bash
 python -m asr_deepspeech.trainers
 ```
 
 ## Pretrained model
-Uncompress the model in `checkpoint/jp_800_5` and test it using this command.
-This will load the config.yml file and load the manifest `test.json`.  
-```
+This will load the `config.yml` containing the list of arguments for the inference and run a pretrained model.  
+```bash
 python -m asr_deepspeech
 ```
 
