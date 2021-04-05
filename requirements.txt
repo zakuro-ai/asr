@@ -16,4 +16,4 @@ apex
 ctcdecode
 numba
 PyYaml
-zakuro
+zakuro-ai
