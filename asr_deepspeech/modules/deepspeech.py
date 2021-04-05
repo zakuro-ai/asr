@@ -5,10 +5,11 @@ from asr_deepspeech.decoders import GreedyDecoder
 import os
 from ascii_graph import Pyasciigraph
 from asr_deepspeech.data.loaders import AudioDataLoader
-from asr_deepspeech.data.samplers import BucketingSampler, DistributedBucketingSampler
+from asr_deepspeech.data.samplers import BucketingSampler
 from .blocks import *
 from asr_deepspeech.data.dataset import SpectrogramDataset
 from argparse import Namespace
+from zakuro import hub
 
 class DeepSpeech(nn.Module):
     def __init__(self,
@@ -42,10 +43,14 @@ class DeepSpeech(nn.Module):
         self.model_path = model_path
         self.build_network()
         self.decoder = GreedyDecoder(self.labels)
-        if os.path.exists(model_path):
+        try:
+            assert model_path is not None
+            assert os.path.exists(model_path)
+            print(f"{self.id}>> Loading {model_path}")
             ckpt = Namespace(**torch.load(model_path))
             self.load_state_dict(ckpt.state_dict)
-
+        except:
+            pass
     def build_network(self):
         self.conv = MaskConv(nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(41, 11), stride=(2, 2), padding=(20, 5)),
@@ -112,25 +117,20 @@ class DeepSpeech(nn.Module):
         x = self.inference_softmax(x)
         return x, output_lengths
 
-    def get_loader(self, manifest, batch_size,num_workers, dist=None):
-        dataset =  SpectrogramDataset(self.audio_conf, manifest, self.labels)
-        if dist is None:
-            sampler = BucketingSampler(
-                dataset,
-                batch_size=batch_size
-            )
-        else:
-            sampler = DistributedBucketingSampler(
-                dataset,
-                batch_size=batch_size,
-                num_replicas=dist.world_size,
-                rank=dist.rank
-            )
-
+    def get_loader(self, manifest, batch_size, num_workers):
+        dataset = SpectrogramDataset(audio_conf=self.audio_conf,
+                                     manifest_filepath=manifest,
+                                     labels=self.labels,
+                                     normalize=True,
+                                     spec_augment=self.audio_conf.spec_augment)
+        sampler = BucketingSampler(dataset,
+                                   batch_size=batch_size)
         loader = AudioDataLoader(dataset,
                                  num_workers=num_workers,
                                  batch_sampler=sampler)
-        return loader
+
+        sampler.shuffle()
+        return loader, sampler
 
     def __call__(self,
                  loader = None,
@@ -142,93 +142,97 @@ class DeepSpeech(nn.Module):
                  verbose=False,
                  half=False,
                  output_file=None,
-                 main_proc=True):
-        if loader is None:
-            loader = self.get_loader(manifest=manifest,
-                                     batch_size=batch_size,
-                                     num_workers=num_workers,
-                                     dist=dist)
-        device = "cuda"if cuda else "cpu"
-        decoder = self.decoder
-        target_decoder = self.decoder
-        self.eval()
-        self.to(device)
-        total_cer, total_wer, num_tokens, num_chars = 0, 0, 0, 0
-        output_data = []
-        min_str, max_str, last_str, min_cer, max_cer = "", "", "", 100, 0
-        hcers = dict([(k, 1) for k in range(10)])
-        for i, (data) in enumerate(loader):
-            inputs, targets, input_percentages, target_sizes = data
-            input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
-            inputs = inputs.to(device)
-            if half:
-                inputs = inputs.half()
-            # unflatten targets
-            split_targets = []
-            offset = 0
-            for size in target_sizes:
-                split_targets.append(targets[offset:offset + size])
-                offset += size
+                 main_proc=True,
+                 restart_from=None):
+        with torch.no_grad():
+            if loader is None:
+                loader, sampler = self.get_loader(manifest=manifest,
+                                                  batch_size=batch_size,
+                                                  num_workers=num_workers)
+            if restart_from is not None:
+                hub.restart_from(self, restart_from)
 
-            out, output_sizes = self.forward(inputs, input_sizes)
+            device = "cuda"if cuda else "cpu"
+            decoder = self.decoder
+            target_decoder = self.decoder
+            self.eval()
+            self.to(device)
+            total_cer, total_wer, num_tokens, num_chars = 0, 0, 0, 0
+            output_data = []
+            min_str, max_str, last_str, min_cer, max_cer = "", "", "", 100, 0
+            hcers = dict([(k, 1) for k in range(10)])
+            for i, (data) in enumerate(loader):
+                inputs, targets, input_percentages, target_sizes = data
+                input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
+                inputs = inputs.to(device)
+                if half:
+                    inputs = inputs.half()
+                # unflatten targets
+                split_targets = []
+                offset = 0
+                for size in target_sizes:
+                    split_targets.append(targets[offset:offset + size])
+                    offset += size
 
-            decoded_output, _ = decoder.decode(out, output_sizes)
-            target_strings = target_decoder.convert_to_strings(split_targets)
+                out, output_sizes = self.forward(inputs, input_sizes)
 
-            if output_file is not None:
-                # add output to data array, and continue
-                output_data.append((out.detach().cpu().numpy(), output_sizes.numpy(), target_strings))
-            for x in range(len(target_strings)):
-                transcript, reference = decoded_output[x][0], target_strings[x][0]
-                wer_inst = decoder.wer(transcript, reference)
-                cer_inst = decoder.cer(transcript, reference)
-                total_wer += wer_inst
-                total_cer += cer_inst
-                num_tokens += len(reference.split())
-                num_chars += len(reference.replace(' ', ''))
-                wer_inst = float(wer_inst) / len(reference.split())
-                cer_inst = float(cer_inst) / len(reference.replace(' ', ''))
-                wer_inst = wer_inst * 100
-                cer_inst = cer_inst * 100
-                wer_inst = min(wer_inst, 100)
-                cer_inst = min(cer_inst, 100)
-                hcers[min(int(cer_inst//10), 9)]+=1
-                last_str = f"Ref:{reference.lower()}" \
-                           f"\nHyp:{transcript.lower()}" \
-                           f"\nWER:{wer_inst}  " \
-                           f"- CER:{cer_inst}"
-                if cer_inst < min_cer:
-                    min_cer = cer_inst
-                    min_str = last_str
-                if cer_inst > max_cer:
-                    max_cer = cer_inst
-                    max_str = last_str
-                print(last_str) if verbose else None
-        wer = float(total_wer) / num_tokens
-        cer = float(total_cer) / num_chars
+                decoded_output, _ = decoder.decode(out, output_sizes)
+                target_strings = target_decoder.convert_to_strings(split_targets)
 
-        cers = [(f'{k*10}-{(k*10) + 10}', v-1) for k, v in hcers.items()]
+                if output_file is not None:
+                    # add output to data array, and continue
+                    output_data.append((out.detach().cpu().numpy(), output_sizes.numpy(), target_strings))
+                for x in range(len(target_strings)):
+                    transcript, reference = decoded_output[x][0], target_strings[x][0]
+                    wer_inst = decoder.wer(transcript, reference)
+                    cer_inst = decoder.cer(transcript, reference)
+                    total_wer += wer_inst
+                    total_cer += cer_inst
+                    num_tokens += len(reference.split())
+                    num_chars += len(reference.replace(' ', ''))
+                    wer_inst = float(wer_inst) / len(reference.split())
+                    cer_inst = float(cer_inst) / len(reference.replace(' ', ''))
+                    wer_inst = wer_inst * 100
+                    cer_inst = cer_inst * 100
+                    wer_inst = min(wer_inst, 100)
+                    cer_inst = min(cer_inst, 100)
+                    hcers[min(int(cer_inst//10), 9)]+=1
+                    last_str = f"Ref:{reference.lower()}" \
+                               f"\nHyp:{transcript.lower()}" \
+                               f"\nWER:{wer_inst}  " \
+                               f"- CER:{cer_inst}"
+                    if cer_inst < min_cer:
+                        min_cer = cer_inst
+                        min_str = last_str
+                    if cer_inst > max_cer:
+                        max_cer = cer_inst
+                        max_str = last_str
+                    print(last_str) if verbose else None
+            wer = float(total_wer) / num_tokens
+            cer = float(total_cer) / num_chars
 
-        graph = Pyasciigraph()
-        asciihistogram = "\n|".join(graph.graph('CER histogram', cers))
+            cers = [(f'{k*10}-{(k*10) + 10}', v-1) for k, v in hcers.items()]
+
+            graph = Pyasciigraph()
+            asciihistogram = "\n|".join(graph.graph('CER histogram', cers))
 
 
-        if main_proc and output_file is not None:
-            with open(output_file, "w") as f:
-                f.write("\n".join([
-                    f"================= {wer*100:.2f}/{cer*100:.2f} =================",
-                    "----- BEST -----",
-                    min_str,
-                    "----- LAST -----",
-                    last_str,
-                    "----- WORST -----",
-                    max_str,
-                    asciihistogram,
-                    "=============================================\n"
+            if main_proc and output_file is not None:
+                with open(output_file, "w") as f:
+                    f.write("\n".join([
+                        f"================= {wer*100:.2f}/{cer*100:.2f} =================",
+                        "----- BEST -----",
+                        min_str,
+                        "----- LAST -----",
+                        last_str,
+                        "----- WORST -----",
+                        max_str,
+                        asciihistogram,
+                        "=============================================\n"
 
-                ]))
+                    ]))
 
-        return wer * 100, cer * 100, output_data
+            return wer * 100, cer * 100, output_data
 
     def get_seq_lens(self, input_length):
         """

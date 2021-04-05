@@ -1,6 +1,6 @@
 #docker rmi -f jmcadic/vanilla:deepspeech
 #docker rmi -f jmcadic/deepspeech
-docker build . -t jmcadic/deepspeech
+#docker build . -t jmcadic/deepspeech
 docker run \
   --rm \
   --gpus "device=1" \

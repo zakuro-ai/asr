@@ -2,9 +2,6 @@ import time
 from tqdm import tqdm
 import torch.utils.data.distributed
 from apex import amp
-from asr_deepspeech.data.dataset import SpectrogramDataset
-from asr_deepspeech.data.loaders import AudioDataLoader
-from asr_deepspeech.data.samplers import BucketingSampler, DistributedBucketingSampler
 from asr_deepspeech import reduce_tensor, check_loss
 from datetime import timedelta
 import numpy as np
@@ -78,7 +75,12 @@ class DeepSpeechTrainer:
         self.main_proc = True
         self.output_file = output_file
         self.metrics = metrics
-        self.train_loader, self.test_loader, self.train_sampler = self.get_loaders()
+        self.train_loader, self.train_sampler = self.model.get_loader(manifest=self.train_manifest,
+                                                                      batch_size=self.batch_size,
+                                                                      num_workers=self.num_workers)
+        self.test_loader, self.test_sampler = self.model.get_loader(manifest=self.val_manifest,
+                                                                    batch_size=self.batch_size,
+                                                                    num_workers=self.num_workers)
         self.optimizer = self.get_optimizer()
         self.load()
         self.show()
@@ -117,36 +119,7 @@ class DeepSpeechTrainer:
                                                loss_scale=self.optim.loss_scale)
         return optimizer
 
-    def get_loaders(self):
-        train_dataset, test_dataset = SpectrogramDataset(audio_conf=self.model.audio_conf,
-                                                         manifest_filepath=self.train_manifest,
-                                                         labels=self.model.labels,
-                                                         normalize=True,
-                                                         spec_augment=self.model.audio_conf.spec_augment),\
-                                      SpectrogramDataset(audio_conf=self.model.audio_conf,
-                                                         manifest_filepath=self.val_manifest,
-                                                         labels=self.model.labels,
-                                                         normalize=True,
-                                                         spec_augment=False)
-        if not self.dist is not None:
-            train_sampler = BucketingSampler(train_dataset,
-                                             batch_size=self.batch_size)
-        else:
-            train_sampler = DistributedBucketingSampler(train_dataset,
-                                                        batch_size=self.batch_size,
-                                                        num_replicas=self.dist.world_size,
-                                                        rank=self.dist.rank)
-        train_loader = AudioDataLoader(train_dataset,
-                                       num_workers=self.num_workers,
-                                       batch_sampler=train_sampler)
-        test_loader = AudioDataLoader(test_dataset,
-                                      batch_size=self.batch_size,
-                                      num_workers=self.num_workers)
 
-        if (self.shuffle and self.start_epoch != 0) or not self.optim.sorta_grad:
-            print("Shuffling batches for the following epochs")
-            train_sampler.shuffle(self.start_epoch)
-        return train_loader, test_loader, train_sampler
 
     def description(self):
         id = self.model.id
@@ -294,7 +267,7 @@ class DeepSpeechTrainer:
         for g in self.optimizer.param_groups:
             g['lr'] = g['lr'] / self.optim.learning_anneal
 
-        self.train_sampler.shuffle(self.epoch) if self.shuffle else None
+        self.train_sampler.shuffle() if self.shuffle else None
 
         return True
 
@@ -319,3 +292,4 @@ class DeepSpeechTrainer:
             "optimizer": self.optimizer,
             "state_dict": self.model.state_dict()
         }, file_path)
+
