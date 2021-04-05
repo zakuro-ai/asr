@@ -99,11 +99,11 @@ trainer:
 inference:
   cuda:         true
   half:         false
-  dist:         null
   manifest:     *test_manifest
   output_file:  *output_file
   batch_size:   *batch_size
   num_workers:  *num_wokers
+  restart_from: "zakuro://asrdeepspeech/jp_800_5"
 
 windows:
   'hamming':    "scipy.signal.hamming"
