@@ -2,7 +2,7 @@ docker rmi -f jmcadic/deepspeech
 docker build . -t jmcadic/deepspeech
 docker run \
   --rm \
-  --gpus "device=1" \
+  --gpus "device=0" \
   -it \
   --shm-size=70g \
   -v $(pwd):/workspace \
