@@ -1,4 +1,4 @@
-![alt text](img/Training-Deep-Speech.png)
+![alt text](img/asr.jpeg)
 # ASRDeepspeech (English/Japanese)
 
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
