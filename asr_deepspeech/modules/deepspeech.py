@@ -136,7 +136,7 @@ class DeepSpeech(nn.Module):
                  loader = None,
                  manifest=None,
                  batch_size=None,
-                 cuda=True,
+                 device="cuda",
                  num_workers=32,
                  dist=None,
                  verbose=False,
@@ -149,10 +149,9 @@ class DeepSpeech(nn.Module):
                 loader, sampler = self.get_loader(manifest=manifest,
                                                   batch_size=batch_size,
                                                   num_workers=num_workers)
-            if restart_from is not None:
-                hub.restart_from(self, restart_from)
+            # if restart_from is not None:
+            #     hub.restart_from(self, restart_from)
 
-            device = "cuda"if cuda else "cpu"
             decoder = self.decoder
             target_decoder = self.decoder
             self.eval()

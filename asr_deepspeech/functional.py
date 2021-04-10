@@ -3,7 +3,50 @@ import torch.distributed as dist
 import torch
 import yaml
 from argparse import Namespace
+from sakura import RecNamespace
+class DeepSpeechLoader(yaml.FullLoader):
 
+    def __init__(self, stream):
+        super(DeepSpeechLoader, self).__init__(stream)
+    def get_single_data(self, *args, **kwargs):
+        d = super(DeepSpeechLoader, self).get_single_data(*args, **kwargs)
+        ns = RecNamespace(d)
+        references = self.find_refs(d, ns)
+        [self.format(d, k, v) for k, v in d.items()]
+
+    @staticmethod
+    def find_refs(d, ns):
+        refs = {}
+        for k , v in d.items():
+            if type(v) == str:
+                if "{" in v:
+                    keys = [k.split("}")[0] for k in v.split("{")][1:]
+                    print(keys, ns)
+                    try:
+                        mapping = dict([(k, eval(f"{k}")) for k in keys])
+                    except NameError:
+                        a=1
+                    # for k in keys:
+                    #     v.replace(f"{ {k} }", map[k])
+                    a=1
+            elif type(v) == dict:
+                refs.update({k: DeepSpeechLoader.find_refs(v, ns)})
+            else:
+                a=1
+        return refs
+
+    @staticmethod
+    def format(d, k, v):
+        if type(v) == dict:
+            _d = dict([(_k, DeepSpeechLoader.format(d, _k, _v)) for _k, _v in v.items()])
+            d[k] = v
+            # return d
+        else:
+            if type(v)==str:
+                if "{" in v:
+                    a=1
+    # def __new__(cls, *args, **kwargs):
+    #     super(DeepSpeechLoader, cls).__new__(*args, **kwargs)
 
 def load_config():
     def unfold(l):
@@ -17,33 +60,33 @@ def load_config():
                 L.append(v)
         return L
     ns = yaml.load(open("config.yml", "r"), Loader=yaml.FullLoader)
-    for gp, key, sep in [
-        ("meta",        "root_data",        "/"),
-        ("meta",        "output_file",      "/"),
-        ("model",       "id",               ""),
-        ("model",       "label_path",       "/"),
-        ("model",       "model_path",       "/"),
-        ("trainer",     "continue_from",    "/"),
-        ("trainer",     "train_manifest",   "/"),
-        ("trainer",     "val_manifest",     "/"),
-        ("trainer",     "output_file",      "/"),
-        ("trainer",     "save_folder",      "/"),
-        ("inference",   "manifest",         "/"),
-        ("inference",   "output_file",      "/"),
-
-    ]:
-        ns[gp][key] = sep.join(unfold(ns[gp][key])) if type(ns[gp][key])==list else ns[gp][key]
-
-    ns = Namespace(**ns)
-
-
-    ns.dist = Namespace(**ns.dist) if ns.dist is not None else None
-    ns.model["decoder"], ns.model["audio_conf"], ns.trainer["metrics"] = \
-        Namespace(**ns.model["decoder"]),\
-        Namespace(**ns.model["audio_conf"]),\
-        Namespace(**ns.trainer["metrics"])
-    ns.trainer["optim"] = Namespace(**ns.trainer["optim"])
-    return ns
+    # for gp, key, sep in [
+    #     ("meta",        "root_data",        "/"),
+    #     ("meta",        "output_file",      "/"),
+    #     ("model",       "id",               ""),
+    #     ("model",       "label_path",       "/"),
+    #     ("model",       "model_path",       "/"),
+    #     ("trainer",     "continue_from",    "/"),
+    #     ("trainer",     "train_manifest",   "/"),
+    #     ("trainer",     "val_manifest",     "/"),
+    #     ("trainer",     "output_file",      "/"),
+    #     ("trainer",     "save_folder",      "/"),
+    #     ("inference",   "manifest",         "/"),
+    #     ("inference",   "output_file",      "/"),
+    #
+    # ]:
+    #     ns[gp][key] = sep.join(unfold(ns[gp][key])) if type(ns[gp][key])==list else ns[gp][key]
+    #
+    # ns = Namespace(**ns)
+    #
+    #
+    # ns.dist = Namespace(**ns.dist) if ns.dist is not None else None
+    # ns.model["decoder"], ns.model["audio_conf"], ns.trainer["metrics"] = \
+    #     Namespace(**ns.model["decoder"]),\
+    #     Namespace(**ns.model["audio_conf"]),\
+    #     Namespace(**ns.trainer["metrics"])
+    # ns.trainer["optim"] = Namespace(**ns.trainer["optim"])
+    return RecNamespace(ns)
 
 
 def to_np(x):
