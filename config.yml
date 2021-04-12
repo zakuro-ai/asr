@@ -1,19 +1,19 @@
 meta:
   version:  'v0.0.1'
-  language:  'en'
+  language:  'jp_800_5'
   root:       "checkpoint"
-  root_data:  "checkpoint/en"
-  output_file: "checkpoint/en/output.txt"
+  root_data:  "checkpoint/jp_800_5"
+  output_file: "checkpoint/jp_800_5/output.txt"
 
 model:
-  id: "asr_en_v0.0.1"
+  id: "asr_jp_800_5_v0.0.1"
   rnn_hidden_size:    800
   rnn_hidden_layers:  5
   rnn_type:           nn.GRU
   context:            20
   bidirectional:      true
-  label_path: "checkpoint/en/labels.json"
-  model_path: "checkpoint/en/model.pth"
+  label_path: "checkpoint/jp_800_5/labels.json"
+  model_path: "checkpoint/jp_800_5/model.pth"
   decoder:
     top_paths:    1
     beam_width:   10
@@ -37,9 +37,9 @@ model:
 
 
 loaders:
-  train_manifest: "checkpoint/en/train.json"
-  val_manifest: "checkpoint/en/test.json"
-  batch_size:   150
+  train_manifest: "checkpoint/jp_800_5/train.json"
+  val_manifest: "checkpoint/jp_800_5/test.json"
+  batch_size:   40
   num_workers:  32
 
 optim:
@@ -58,16 +58,19 @@ optim:
 
 trainer:
   epochs:                   1000
-
+  model_path: "pth/mnist_cnn.pt"
+  checkpoint_path: "pth/mnist_cnn.ckpt.pt"
+  device: "cuda"
+  device_test: "cpu"
 
 inference:
   cuda:         true
   half:         false
-  manifest:     "checkpoint/en/test.json"
-  output_file:  "checkpoint/en/output.txt"
+  manifest:     "checkpoint/jp_800_5/test.json"
+  output_file:  "checkpoint/jp_800_5/output.txt"
   batch_size:   10
   num_workers:  32
-  restart_from: "zakuro://asrdeepspeech/en"
+  restart_from: "zakuro://asrdeepspeech/jp_800_5"
 
 windows:
   'hamming':    "scipy.signal.hamming"

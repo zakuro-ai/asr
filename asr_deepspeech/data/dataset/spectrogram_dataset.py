@@ -30,7 +30,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         self.ids = ids
         self.size = len(self.ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
-        self._cache = True
+        self._cache = False
         super(SpectrogramDataset, self).__init__(audio_conf, normalize, audio_conf.speed_volume_perturb, spec_augment)
         if self._cache:
             self.specs = dict([(v["audio_filepath"], self.parse_audio(v["audio_filepath"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])

@@ -43,14 +43,14 @@ class DeepSpeech(nn.Module):
         self.model_path = model_path
         self.build_network()
         self.decoder = GreedyDecoder(self.labels)
-        try:
-            assert model_path is not None
-            assert os.path.exists(model_path)
-            print(f"{self.id}>> Loading {model_path}")
-            ckpt = Namespace(**torch.load(model_path))
-            self.load_state_dict(ckpt.state_dict)
-        except:
-            pass
+        # try:
+        #     assert model_path is not None
+        #     assert os.path.exists(model_path)
+        #     print(f"{self.id}>> Loading {model_path}")
+        #     ckpt = Namespace(**torch.load(model_path))
+        #     self.load_state_dict(ckpt.state_dict)
+        # except:
+        #     pass
     def build_network(self):
         self.conv = MaskConv(nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(41, 11), stride=(2, 2), padding=(20, 5)),
