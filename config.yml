@@ -62,6 +62,7 @@ trainer:
   checkpoint_path: "pth/mnist_cnn.ckpt.pt"
   device: "cuda"
   device_test: "cpu"
+  mixed_precision: true
 
 inference:
   cuda:         true

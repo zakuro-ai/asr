@@ -18,7 +18,8 @@ class DeepSpeechTrainer(SakuraTrainer):
                  model_path,
                  checkpoint_path,
                  device,
-                 device_test):
+                 device_test,
+                 mixed_precision):
         super(DeepSpeechTrainer, self).__init__(model,
                                                 optimizer=optimizer,
                                                 scheduler=scheduler,
@@ -29,8 +30,8 @@ class DeepSpeechTrainer(SakuraTrainer):
                                                 device=device,
                                                 device_test=device_test)
         self.criterion = criterion
+        self.mixed_precision = mixed_precision
         self.load()
-
 
     def run(self, train_loader, test_loader):
         for self._epoch in self._epochs:
@@ -52,43 +53,55 @@ class DeepSpeechTrainer(SakuraTrainer):
 
     @parallel
     def train(self, train_loader):
-        scaler = torch.cuda.amp.GradScaler()
         self._model.train()
         self._model.to(self._device)
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
         loader = train_loader
+        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
         for iter, data in tqdm(enumerate(loader, start=0),
                                total=len(loader),
                                desc=self.description()):
-            inputs, targets, input_percentages, target_sizes = data
-            input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
-            with torch.cuda.amp.autocast():
-                # measure data loading time
-                inputs = inputs.to(self._device)
-                out, output_sizes = self._model.forward(inputs, input_sizes)
-                out = out.transpose(0, 1)  # TxNxH
-                float_out = out.float()  # ensure float32 for loss
-                float_out = float_out.log_softmax(2)
-                loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(self._device)
-                loss = loss / inputs.size(0)  # average the loss by minibatch
 
-                # Check the loss
-                loss_value = loss.item()
-                valid_loss, error = check_loss(loss, loss_value)
-                if valid_loss:
-                    self._optimizer.zero_grad()
+            if self.mixed_precision:
+                with torch.cuda.amp.autocast():
+                    valid_loss, loss, loss_value = self.fit(data)
+            else:
+                valid_loss, loss, loss_value = self.fit(data)
+
+            if valid_loss:
+                self._optimizer.zero_grad()
+                if self.mixed_precision:
                     scaler.scale(loss).backward()
-                    # loss.backward()
-                    current.loss+=loss_value
                     scaler.step(self._optimizer)
                     scaler.update()
-                    # self._optimizer.step()
                 else:
-                    print("Loss non valid, skipped")
-                    pass
+                    loss.backward()
+                    self._optimizer.step()
+                current.loss+=loss_value
+            else:
+                print("Loss non valid, skipped")
+                pass
+
         self.update(current, best, loader)
         self._scheduler.step()
+
+    def fit(self, data):
+        inputs, targets, input_percentages, target_sizes = data
+        input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
+        # measure data loading time
+        inputs = inputs.to(self._device)
+        out, output_sizes = self._model.forward(inputs, input_sizes)
+        out = out.transpose(0, 1)  # TxNxH
+        float_out = out.float()  # ensure float32 for loss
+        float_out = float_out.log_softmax(2)
+        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(self._device)
+        loss = loss / inputs.size(0)  # average the loss by minibatch
+
+        # Check the loss
+        loss_value = loss.item()
+        valid_loss, error = check_loss(loss, loss_value)
+        return valid_loss, loss, loss_value
 
     @parallel
     def test(self, test_loader):
@@ -124,20 +137,22 @@ class DeepSpeechTrainer(SakuraTrainer):
                             subparam._grad.data = subparam._grad.data.to(device)
 
     def load(self, all=True):
-        ckpt = torch.load("model.pth", map_location='cpu')
-        if all:
-            self._optimizer.load_state_dict(ckpt["optimizer"].state_dict())
-            self._scheduler = ckpt["scheduler"]
-            self._scheduler.optimizer = self._optimizer
-        self._metrics = ckpt["metrics"]
-        self._epochs.start, self._epochs.current, self._epochs.best = ckpt["epoch"], ckpt["epoch"], ckpt["epoch"]
+        model_path = "model.pth"
+        if os.path.exists(model_path):
+            ckpt = torch.load(model_path, map_location='cpu')
+            if all:
+                self._optimizer.load_state_dict(ckpt["optimizer"].state_dict())
+                self._scheduler = ckpt["scheduler"]
+                self._scheduler.optimizer = self._optimizer
+            self._metrics = ckpt["metrics"]
+            self._epochs.start, self._epochs.current, self._epochs.best = ckpt["epoch"], ckpt["epoch"], ckpt["epoch"]
 
 
     def save(self, file_path):
         torch.save({
             "epoch": self._epochs.best,
             "metrics": self._metrics,
-            "optimizer": self._optimizer,
+            "optimizer": self._optimizer.state_dict(),
             "scheduler": self._scheduler,
             "state_dict": self._model.state_dict()
         }, file_path)
