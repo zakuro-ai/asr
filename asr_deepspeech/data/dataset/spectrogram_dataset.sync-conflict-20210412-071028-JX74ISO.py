@@ -10,8 +10,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
                  manifest_filepath,
                  labels,
                  normalize=False,
-                 spec_augment=False,
-                 caching=False):
+                 spec_augment=False):
         """
         Dataset that loads tensors via a csv containing file paths to audio files and transcripts separated by
         a comma. Each new line is a different sample. Example below:
@@ -31,21 +30,14 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         self.ids = ids
         self.size = len(self.ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
-        self.caching = caching
         super(SpectrogramDataset, self).__init__(audio_conf, normalize, audio_conf.speed_volume_perturb, spec_augment)
-        if self.caching:
-            self.specs = dict([(v["audio_filepath"], self.parse_audio(v["audio_filepath"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])
-            self.transcripts = dict([(v["text"], self.parse_transcript(transcript=v["text"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading transcripts")])
+        self.specs = dict([(v["audio_filepath"], self.parse_audio(v["audio_filepath"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])
+        self.transcripts = dict([(v["text"], self.parse_transcript(transcript=v["text"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading transcripts")])
 
     def __getitem__(self, index):
         sample = self.ids[index]
         audio_path, transcript = sample["audio_filepath"], sample["text"]
-        if self.caching:
-            spec, transcript = self.specs[audio_path], self.transcripts[transcript]
-        else:
-            spec, transcript = self.parse_audio(audio_path), self.parse_transcript(transcript)
-
-        return spec, transcript
+        return self.specs[audio_path], self.transcripts[transcript]
 
     def parse_transcript(self, transcript):
         transcript = transcript.replace('\n', '')

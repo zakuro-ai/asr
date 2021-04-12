@@ -33,10 +33,12 @@ if __name__ == '__main__':
     # Init the loaders
     (train_loader, _), (test_loader, _) = model.get_loader(manifest=config.loaders.train_manifest,
                                                            batch_size=config.loaders.batch_size,
-                                                           num_workers=config.loaders.num_workers),\
+                                                           num_workers=config.loaders.num_workers,
+                                                           caching=config.loaders.caching),\
                                           model.get_loader(manifest=config.loaders.val_manifest,
                                                            batch_size=config.loaders.batch_size,
-                                                           num_workers=config.loaders.num_workers)
+                                                           num_workers=config.loaders.num_workers,
+                                                           caching=config.loaders.caching)
     # Run the trianer
     trainer.run(train_loader=train_loader,
                 test_loader=test_loader)

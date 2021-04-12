@@ -41,6 +41,7 @@ loaders:
   val_manifest: "checkpoint/jp_800_5/test.json"
   batch_size:   40
   num_workers:  32
+  caching: True
 
 optim:
   max_norm:             400
