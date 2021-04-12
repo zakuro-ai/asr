@@ -34,8 +34,14 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         self.caching = caching
         super(SpectrogramDataset, self).__init__(audio_conf, normalize, audio_conf.speed_volume_perturb, spec_augment)
         if self.caching:
-            self.specs = dict([(v["audio_filepath"], self.parse_audio(v["audio_filepath"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])
-            self.transcripts = dict([(v["text"], self.parse_transcript(transcript=v["text"])) for key, v in tqdm(data.items(), total=len(data), desc="Loading transcripts")])
+            self.specs = dict([(
+                v["audio_filepath"],
+                self.parse_audio(v["audio_filepath"])
+            ) for key, v in tqdm(data.items(), total=len(data), desc="Loading audio")])
+            self.transcripts = dict([(
+                v["text"],
+                self.parse_transcript(transcript=v["text"])
+            ) for key, v in tqdm(data.items(), total=len(data), desc="Loading transcripts")])
 
     def __getitem__(self, index):
         sample = self.ids[index]

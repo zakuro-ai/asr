@@ -14,12 +14,14 @@ class DeepSpeechTrainer(SakuraTrainer):
                  epochs,
                  metrics,
                  optimizer,
-                 scheduler,
                  model_path,
                  checkpoint_path,
                  device,
                  device_test,
-                 mixed_precision):
+                 mixed_precision,
+                 output_file,
+                 scheduler=None
+                 ):
         super(DeepSpeechTrainer, self).__init__(model,
                                                 optimizer=optimizer,
                                                 scheduler=scheduler,
@@ -31,6 +33,7 @@ class DeepSpeechTrainer(SakuraTrainer):
                                                 device_test=device_test)
         self.criterion = criterion
         self.mixed_precision = mixed_precision
+        self.output_file = output_file
         self.load()
 
     def run(self, train_loader, test_loader):
@@ -41,17 +44,17 @@ class DeepSpeechTrainer(SakuraTrainer):
 
     def checkpoint(self):
         if self._metrics.test.current == self._metrics.test.best:
-            os.makedirs(parent(self._model_path), exist_ok=True)
-            torch.save(self._model.state_dict(), self._model_path)
+            self.save()
 
     def description(self):
         lr = self._optimizer.param_groups[0]["lr"]*pow(10, 5)
         current, best = self._metrics.test.current, self._metrics.test.best
+        tcurrent, tbest = self._metrics.train.current, self._metrics.train.best
         suffix = f" | CER: {current.cer:.4f} / ({best.cer:.4f})"
-        suffix += f" | Loss:{current.loss:.4f} / ({best.loss:.4f})"
+        suffix += f" | Loss:{tcurrent.loss:.4f} / ({tbest.loss:.4f})"
         return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | Epoch: {self._epochs.current}/{self._epochs.total}"
 
-    @parallel
+    # @parallel
     def train(self, train_loader):
         self._model.train()
         self._model.to(self._device)
@@ -59,6 +62,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         current, best = self._metrics.train.current, self._metrics.train.best
         loader = train_loader
         scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+
+
         for iter, data in tqdm(enumerate(loader, start=0),
                                total=len(loader),
                                desc=self.description()):
@@ -83,8 +88,8 @@ class DeepSpeechTrainer(SakuraTrainer):
                 print("Loss non valid, skipped")
                 pass
 
-        self.update(current, best, loader)
-        self._scheduler.step()
+        self.update(current, best, loader, update_best=False)
+        self._scheduler.step() if self._scheduler is not None else None
 
     def fit(self, data):
         inputs, targets, input_percentages, target_sizes = data
@@ -103,22 +108,25 @@ class DeepSpeechTrainer(SakuraTrainer):
         valid_loss, error = check_loss(loss, loss_value)
         return valid_loss, loss, loss_value
 
-    @parallel
+    # @parallel
     def test(self, test_loader):
         current, best = self._metrics.test.current, self._metrics.test.best
         loader = test_loader
-        wer, cer, _ = self._model(loader=loader, device=self._device_test)
+        wer, cer, _ = self._model(loader=loader,
+                                  device=self._device_test,
+                                  output_file=self.output_file)
         current.wer, current.cer = wer, cer
-        self.update(current, best, loader)
+        self.update(current, best, loader, update_best=True)
 
-    def update(self, current, best, loader):
+    def update(self, current, best, loader, update_best=False):
         current.loss /= len(loader.dataset)
         try:
             assert best.cer is not None
             assert best.cer < current.cer
         except AssertionError:
             vars(best).update(vars(current))
-            self._epochs.best = self._epochs.current
+            if update_best:
+                self._epochs.best = self._epochs.current
 
 
     @staticmethod
@@ -137,23 +145,28 @@ class DeepSpeechTrainer(SakuraTrainer):
                             subparam._grad.data = subparam._grad.data.to(device)
 
     def load(self, all=True):
-        model_path = "model.pth"
+        model_path = self._model_path
         if os.path.exists(model_path):
             ckpt = torch.load(model_path, map_location='cpu')
+            self._model.load_state_dict(ckpt["state_dict"])
             if all:
-                self._optimizer.load_state_dict(ckpt["optimizer"].state_dict())
-                self._scheduler = ckpt["scheduler"]
-                self._scheduler.optimizer = self._optimizer
+                self._optimizer.load_state_dict(ckpt["optimizer"])
+                self._scheduler = ckpt["scheduler"] if ckpt["scheduler"] is not None else self._scheduler
+                if self._scheduler is not None:
+                    self._scheduler.optimizer = self._optimizer
             self._metrics = ckpt["metrics"]
             self._epochs.start, self._epochs.current, self._epochs.best = ckpt["epoch"], ckpt["epoch"], ckpt["epoch"]
+            print(f"restart from {model_path}")
 
 
-    def save(self, file_path):
+    def save(self):
+        os.makedirs(parent(self._model_path), exist_ok=True)
         torch.save({
             "epoch": self._epochs.best,
             "metrics": self._metrics,
             "optimizer": self._optimizer.state_dict(),
             "scheduler": self._scheduler,
             "state_dict": self._model.state_dict()
-        }, file_path)
+        }, self._model_path)
+        print(f"{self._model_path} saved...")
 

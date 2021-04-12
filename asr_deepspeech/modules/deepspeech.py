@@ -96,6 +96,25 @@ class DeepSpeech(nn.Module):
         )
         self.inference_softmax = InferenceBatchSoftmax()
 
+    def finetune_from(self, model_path, nlayers=1):
+        # Restart from a pretrained model
+        state_dict = self.state_dict()
+        _state_dict = torch.load( model_path, map_location="cpu")
+        for k, v in _state_dict.items():
+            try:
+                assert state_dict[k].shape == v.shape
+                state_dict[k] = v
+            except:
+                print(k, state_dict[k].shape, v.shape)
+                pass
+        self.load_state_dict(state_dict)
+        print(f"finetune from {model_path} (last {nlayers} layers)")
+
+        if nlayers is not None:
+            # Finetune the last layer
+            for m in list(self.parameters())[:-nlayers]:
+                m.requires_grad=False
+
     def forward(self, x, lengths):
         lengths = lengths.cpu().int()
         output_lengths = self.get_seq_lens(lengths)
@@ -128,7 +147,9 @@ class DeepSpeech(nn.Module):
                                    batch_size=batch_size)
         loader = AudioDataLoader(dataset,
                                  num_workers=num_workers,
-                                 batch_sampler=sampler)
+                                 batch_sampler=sampler
+                                 # pin_memory=True
+                                 )
 
         sampler.shuffle()
         return loader, sampler
@@ -231,6 +252,7 @@ class DeepSpeech(nn.Module):
                         "=============================================\n"
 
                     ]))
+                print(f"saved output to {output_file}")
 
             return wer * 100, cer * 100, output_data
 

@@ -9,13 +9,35 @@ from sakura import asr_metrics
 
 if __name__ == '__main__':
     config = load_config()
+
     # Instantiate the model, optimizer and scheduler
     model = DeepSpeech(**vars(config.model))
-    optimizer = torch.optim.SGD(model.parameters(),
-                                lr=config.optim.lr,
-                                momentum=config.optim.momentum,
-                                nesterov=config.optim.nesterov,
-                                weight_decay=config.optim.weight_decay)
+    model.finetune_from("state_dict.pt", nlayers=None)
+
+
+    # Init the loaders
+    (train_loader, _), (test_loader, _) = model.get_loader(manifest=config.loaders.train_manifest,
+                                                           batch_size=config.loaders.batch_size,
+                                                           num_workers=config.loaders.num_workers,
+                                                           caching=config.loaders.caching), \
+                                          model.get_loader(manifest=config.loaders.val_manifest,
+                                                           batch_size=config.loaders.batch_size,
+                                                           num_workers=config.loaders.num_workers,
+                                                           caching=config.loaders.caching)
+    # optimizer = torch.optim.SGD(model.parameters(),
+    #                             lr=config.optim.lr,
+    #                             momentum=config.optim.momentum,
+    #                             nesterov=config.optim.nesterov,
+    #                             weight_decay=config.optim.weight_decay)
+    # optimizer = torch.optim.Adam(model.parameters())
+
+    optimizer = torch.optim.AdamW(
+                    params=model.parameters(),
+                    lr=config.optim.lr,
+                    betas=eval(config.optim.betas),
+                    eps=config.optim.eps,
+                    weight_decay=config.optim.weight_decay
+                )
     scheduler = StepLR(optimizer,
                        step_size=config.optim.step,
                        gamma=config.optim.gamma)
@@ -28,17 +50,8 @@ if __name__ == '__main__':
                                 metrics=asr_metrics,
                                 **vars(config.trainer))
     # AsyncTrainer
-    trainer = AsyncTrainer(trainer=trainer)
+    # trainer = AsyncTrainer(trainer=trainer)
 
-    # Init the loaders
-    (train_loader, _), (test_loader, _) = model.get_loader(manifest=config.loaders.train_manifest,
-                                                           batch_size=config.loaders.batch_size,
-                                                           num_workers=config.loaders.num_workers,
-                                                           caching=config.loaders.caching),\
-                                          model.get_loader(manifest=config.loaders.val_manifest,
-                                                           batch_size=config.loaders.batch_size,
-                                                           num_workers=config.loaders.num_workers,
-                                                           caching=config.loaders.caching)
     # Run the trianer
     trainer.run(train_loader=train_loader,
                 test_loader=test_loader)

@@ -1,19 +1,35 @@
 meta:
-  version:  'v0.0.1'
-  language:  'jp_800_5'
-  root:       "checkpoint"
-  root_data:  "checkpoint/jp_800_5"
-  output_file: "checkpoint/jp_800_5/output.txt"
+  version:        'v0.0.1'
+  language:       'jp_1024_5_LSTM'
+  root:           "checkpoint"
+  root_data:      "checkpoint/jp_1024_5_LSTM"
+  output_file:    "checkpoint/jp_1024_5_LSTM/output.txt"
 
+trainer:
+  epochs:                   1000
+  model_path:               "checkpoint/jp_1024_5_LSTM/model.pth"
+  checkpoint_path:          "checkpoint/jp_1024_5_LSTM/model.ckpt.pth"
+  output_file:              "checkpoint/jp_1024_5_LSTM/output.txt"
+  device:                   "cuda"
+  device_test:              "cuda"
+  mixed_precision:          true
+
+loaders:
+  train_manifest:           "checkpoint/jp_1024_5_LSTM/train.json"
+  val_manifest:             "checkpoint/jp_1024_5_LSTM/test.json"
+  batch_size:               64
+  num_workers:              32
+  caching:                  false
+  
 model:
-  id: "asr_jp_800_5_v0.0.1"
-  rnn_hidden_size:    800
-  rnn_hidden_layers:  5
-  rnn_type:           nn.GRU
-  context:            20
-  bidirectional:      true
-  label_path: "checkpoint/jp_800_5/labels.json"
-  model_path: "checkpoint/jp_800_5/model.pth"
+  id:                       "asr_jp_1024_5_LSTM_v0.0.1"
+  rnn_hidden_size:          1024
+  rnn_hidden_layers:        5
+  rnn_type:                 nn.LSTM
+  context:                  20
+  bidirectional:            true
+  label_path:               "checkpoint/jp_1024_5_LSTM/labels.json"
+  model_path:               "checkpoint/jp_1024_5_LSTM/model.pth"
   decoder:
     top_paths:    1
     beam_width:   10
@@ -35,44 +51,28 @@ model:
     noise_min:            0.0
     noise_max:            0.5
 
-
-loaders:
-  train_manifest: "checkpoint/jp_800_5/train.json"
-  val_manifest: "checkpoint/jp_800_5/test.json"
-  batch_size:   40
-  num_workers:  32
-  caching: True
-
 optim:
   max_norm:             400
   learning_anneal:      1.005
   keep_batchnorm_fp32:  null
   loss_scale:           1
   opt_level:            'O1'
-  lr:                   0.0003
-  momentum:             0.9
-  sorta_grad:           true
-  nesterov:             true
-  weight_decay:         0.00001
-  gamma: 0.7
-  step: 1
+  lr:                   1.5e-4
+  eps:                  1.0e-8
+  betas:                (0.9, 0.999)
+  weight_decay:         1.0e-5
+  step:                 10
+  gamma:                0.1
 
-trainer:
-  epochs:                   1000
-  model_path: "pth/mnist_cnn.pt"
-  checkpoint_path: "pth/mnist_cnn.ckpt.pt"
-  device: "cuda"
-  device_test: "cpu"
-  mixed_precision: true
 
 inference:
   cuda:         true
   half:         false
-  manifest:     "checkpoint/jp_800_5/test.json"
-  output_file:  "checkpoint/jp_800_5/output.txt"
+  manifest:     "checkpoint/jp_1024_5_LSTM/test.json"
+  output_file:  "checkpoint/jp_1024_5_LSTM/output.txt"
   batch_size:   10
   num_workers:  32
-  restart_from: "zakuro://asrdeepspeech/jp_800_5"
+  restart_from: "zakuro://asrdeepspeech/jp_1024_5_LSTM"
 
 windows:
   'hamming':    "scipy.signal.hamming"
