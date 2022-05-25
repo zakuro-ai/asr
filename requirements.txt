@@ -1,4 +1,4 @@
-llvmlite==0.36.0
+llvmlite
 audioread
 scipy==1.5.4
 appdirs
