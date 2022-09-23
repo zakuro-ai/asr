@@ -1,199 +1,185 @@
-import time
 from tqdm import tqdm
 import torch.utils.data.distributed
-from apex import amp
-from asr_deepspeech.data.dataset import SpectrogramDataset
-from asr_deepspeech.data.loaders import AudioDataLoader
-from asr_deepspeech.data.samplers import BucketingSampler, DistributedBucketingSampler
-from asr_deepspeech import evaluate
-from asr_deepspeech import reduce_tensor, check_loss
-from asr_deepspeech.trainers.asr_trainer import ASRTrainer
-from asr_deepspeech.modules import DeepSpeech
-import json
+from asr_deepspeech import check_loss
+import os
+from sakura.ml import SakuraTrainer
+from gnutools.fs import parent
 
-class DeepSpeechTrainer(ASRTrainer):
-    def __init__(self, model,batch_size, criterion, args):
-        super(DeepSpeechTrainer, self).__init__(model, args)
-        # Set the criterion
+
+class DeepSpeechTrainer(SakuraTrainer):
+    def __init__(
+        self,
+        model,
+        criterion,
+        epochs,
+        metrics,
+        optimizer,
+        model_path,
+        checkpoint_path,
+        device,
+        device_test,
+        mixed_precision,
+        output_file,
+        scheduler=None,
+        overwrite_lr=None,
+    ):
+        super(DeepSpeechTrainer, self).__init__(
+            model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            metrics=metrics,
+            epochs=epochs,
+            model_path=model_path,
+            checkpoint_path=checkpoint_path,
+            device=device,
+            device_test=device_test,
+        )
         self.criterion = criterion
-        self.speed_volume_perturb = args.speed_volume_perturb
-        self.spec_augment = args.spec_augment
-        self.no_shuffle = args.no_shuffle
-        self.no_sorta_grad = args.no_sorta_grad
-        self.max_norm =args.max_norm
-        self.data_loaders(batch_size)
-        # Show the network
-        self.show()
+        self.mixed_precision = mixed_precision
+        self.output_file = output_file
+        self.overwrite_lr = overwrite_lr
+        self.load()
 
-    def run(self, epochs):
-        for self.epoch in range(self.start_epoch, epochs):
-            assert self.train()
-            assert self.eval()
-            assert self.update()
+    def run(self, train_loader, test_loader):
+        for self._epoch in self._epochs:
+            self.train(train_loader)
+            self.test(test_loader)
 
-    def train(self):
-        self.net.train()
-        self.end, self.epoch_valid = time.time(), False
-        start_epoch_time  = time.time()
-        for self.iter, (self.data) in tqdm(enumerate(self.train_loader, start=self.start_iter),
-                                           total=len(self.train_loader),
-                                           desc=self.description()):
-            if self.iter == len(self.train_sampler):
-                break
+    def checkpoint(self):
+        if self._metrics.test.current == self._metrics.test.best:
+            self.save()
+
+    def description(self):
+        lr = self._optimizer.param_groups[0]["lr"] * pow(10, 5)
+        current, best = self._metrics.test.current, self._metrics.test.best
+        tcurrent, tbest = self._metrics.train.current, self._metrics.train.best
+        suffix = f" | CER: {current.cer:.4f} / ({best.cer:.4f})"
+        suffix += f" | Loss:{tcurrent.loss:.4f} / ({tbest.loss:.4f})"
+        return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | Epoch: {self._epochs.current}/{self._epochs.total}"
+
+    def train(self, train_loader):
+        self._model.train()
+        self._model.to(self._device)
+        self.optimizer_to(self._optimizer, self._device)
+        current, best = self._metrics.train.current, self._metrics.train.best
+        loader = train_loader
+        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+
+        for iter, data in tqdm(
+            enumerate(loader, start=0), total=len(loader), desc=self.description()
+        ):
+
+            if self.mixed_precision:
+                with torch.cuda.amp.autocast():
+                    valid_loss, loss, loss_value = self.fit(data)
             else:
-                self.fit()
+                valid_loss, loss, loss_value = self.fit(data)
 
-        self.avg_loss /= len(self.train_sampler)
-        self.loss_results[self.epoch] = self.avg_loss
-        self.epoch_time = time.time() - start_epoch_time
-        return True #self.epoch_valid
+            if valid_loss:
+                self._optimizer.zero_grad()
+                if self.mixed_precision:
+                    scaler.scale(loss).backward()
+                    scaler.step(self._optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    self._optimizer.step()
+                current.loss += loss_value
+            else:
+                print("Loss non valid, skipped")
+                pass
 
-    def fit(self):
+        self.update(current, best, loader, update_best=False)
+        self._scheduler.step() if self._scheduler is not None else None
 
-        inputs, targets, input_percentages, target_sizes = self.data
+    def fit(self, data):
+        inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
         # measure data loading time
-        inputs = inputs.to('cuda')
-
-
-        out, output_sizes = self.net(inputs, input_sizes)
-
+        inputs = inputs.to(self._device)
+        out, output_sizes = self._model.forward(inputs, input_sizes)
         out = out.transpose(0, 1)  # TxNxH
         float_out = out.float()  # ensure float32 for loss
         float_out = float_out.log_softmax(2)
-        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to('cuda')
+        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(
+            self._device
+        )
         loss = loss / inputs.size(0)  # average the loss by minibatch
 
-        # Check to ensure valid loss was calculated
-        self.epoch_valid = max(self.epoch_valid, self.step(loss))
-        # Checkpoint if necessary
-        # self.checkpoint_batch()
-        del loss, out, float_out
-
-    def step(self, loss):
-        if self.distributed:
-            loss = loss.to(self.device)
-            loss_value = reduce_tensor(loss, self.world_size).item()
-        else:
-            loss_value = loss.item()
-
+        # Check the loss
+        loss_value = loss.item()
         valid_loss, error = check_loss(loss, loss_value)
-        if valid_loss:
-            self.optimizer.zero_grad()
-            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                scaled_loss.backward()
-            torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), self.max_norm)
-            self.optimizer.step()
-        else:
-            print(error)
-            print('Skipping grad update')
-            return False
+        return valid_loss, loss, loss_value
 
-        self.avg_loss += loss_value
-        return True
+    def test(self, test_loader):
+        current, best = self._metrics.test.current, self._metrics.test.best
+        loader = test_loader
+        wer, cer, _ = self._model(
+            loader=loader, device=self._device_test, output_file=self.output_file
+        )
+        current.wer, current.cer = wer, cer
+        self.update(current, best, loader, update_best=True)
+        self.checkpoint()
 
-    def eval(self):
-        with torch.no_grad():
-            self.start_iter = 0  # Reset start iteration for next epoch
-            self.wer, self.cer, _ = evaluate(test_loader=self.test_loader,
-                                             model=self.net,
-                                             device=self.device,
-                                             decoder=self.net.decoder,
-                                             target_decoder=self.net.decoder,
-                                             output_file=self.output_file,
-                                             main_proc=self.main_proc)
-            self.wer_results[self.epoch] = self.wer
-            self.cer_results[self.epoch] = self.cer
-            return True
+    def update(self, current, best, loader, update_best=False):
+        current.loss /= len(loader.dataset)
+        try:
+            assert best.cer is not None
+            assert best.cer < current.cer
+        except AssertionError:
+            vars(best).update(vars(current))
+            if update_best:
+                self._epochs.best = self._epochs.current
 
-    def update(self):
-        # Update the board
-        values = {
-            'loss_results': self.loss_results,
-            'cer_results': self.cer_results,
-            'wer_results': self.wer_results
-        }
-        if self.args.visdom and self.main_proc:
-            self.net.visdom_logger.update(self.epoch, values)
-        if self.args.tensorboard and self.main_proc:
-            self.net.tensorboard_logger.update(self.epoch, values, self.net.named_parameters())
-            self.net.values = {
-                'Avg Train Loss': self.avg_loss,
-                'Avg WER': self.wer,
-                'Avg CER': self.cer
-            }
+    @staticmethod
+    def optimizer_to(optim, device):
+        for param in optim.state.values():
+            # Not sure there are any global tensors in the state dict
+            if isinstance(param, torch.Tensor):
+                param.data = param.data.to(device)
+                if param._grad is not None:
+                    param._grad.data = param._grad.data.to(device)
+            elif isinstance(param, dict):
+                for subparam in param.values():
+                    if isinstance(subparam, torch.Tensor):
+                        subparam.data = subparam.data.to(device)
+                        if subparam._grad is not None:
+                            subparam._grad.data = subparam._grad.data.to(device)
 
-        # Save the model
-        condition_chkpt = self.main_proc and self.args.checkpoint
-        condition_best = self.main_proc and (self.best_cer is None or self.best_cer > self.cer)
-        if condition_chkpt or condition_best:
-            file_path = f'{self.save_folder}/deepspeech_{self.epoch+1}.pth.tar' if condition_chkpt else self.model_path
-            self.serialize(file_path=file_path, avg_loss=self.avg_loss)
-            if condition_best:
-                self.best_wer = self.wer
-                self.best_cer = self.cer
-                self.lu = self.epoch
+    def load(self, all=True):
+        model_path = self._model_path
+        if os.path.exists(model_path):
+            ckpt = torch.load(model_path, map_location="cpu")
+            self._model.load_state_dict(ckpt["state_dict"])
+            if all:
+                self._optimizer.load_state_dict(ckpt["optimizer"])
+                if self.overwrite_lr is not None:
+                    self._optimizer.param_groups[0]["lr"] = self.overwrite_lr
+                self._scheduler = (
+                    ckpt["scheduler"]
+                    if ckpt["scheduler"] is not None
+                    else self._scheduler
+                )
+                if self._scheduler is not None:
+                    self._scheduler.optimizer = self._optimizer
+            self._metrics = ckpt["metrics"]
+            self._epochs.start, self._epochs.current, self._epochs.best = (
+                ckpt["epoch"],
+                ckpt["epoch"],
+                ckpt["epoch"],
+            )
+            print(f"restart from {model_path}")
 
-        # anneal lr
-        for g in self.optimizer.param_groups:
-            g['lr'] = g['lr'] / self.args.learning_anneal
-
-        if not self.args.no_shuffle:
-            # print("Shuffling batches...")
-            self.train_sampler.shuffle(self.epoch)
-
-        return True
-
-    def data_loaders(self, batch_size):
-        train_dataset = SpectrogramDataset(audio_conf=self.audio_conf,
-                                           manifest_filepath=self.train_manifest,
-                                           labels=self.labels,
-                                           normalize=True,
-                                           speed_volume_perturb=self.speed_volume_perturb,
-                                           spec_augment=self.spec_augment)
-        test_dataset = SpectrogramDataset(audio_conf=self.audio_conf,
-                                          manifest_filepath=self.val_manifest,
-                                          labels=self.labels,
-                                          normalize=True,
-                                          speed_volume_perturb=False,
-                                          spec_augment=False)
-        if not self.distributed:
-            print('BucketingSampler')
-            self.train_sampler = BucketingSampler(train_dataset, batch_size=batch_size)
-        else:
-            print('DistributedBucketingSampler')
-            self.train_sampler = DistributedBucketingSampler(train_dataset,
-                                                             batch_size=batch_size,
-                                                             num_replicas=self.args.world_size,
-                                                             rank=self.rank)
-        self.train_loader = AudioDataLoader(train_dataset,
-                                            num_workers=self.args.num_workers,
-                                            batch_sampler=self.train_sampler)
-        self.test_loader = AudioDataLoader(test_dataset,
-                                           batch_size=self.args.batch_size,
-                                           num_workers=self.args.num_workers)
-
-        if (not self.no_shuffle and self.start_epoch != 0) or self.no_sorta_grad:
-            print("Shuffling batches for the following epochs")
-            self.train_sampler.shuffle(self.start_epoch)
-
-    def checkpoint_batch(self):
-        # measure elapsed time
-        self.batch_time.update(time.time() - self.end)
-        self.end = time.time()
-        if self.checkpoint_per_batch > 0 and self.iter > 0 and (self.iter + 1) % self.checkpoint_per_batch == 0 and self.main_proc:
-            file_path = f'{self.save_folder}/deepspeech_checkpoint_epoch_{self.epoch+1}_iter_{self.iter + 1}.pth'
-            print("Saving checkpoint model to %s" % file_path)
-            self.serialize(avg_loss=self.avg_loss / self.iter)
-
-    def serialize(self, file_path, avg_loss=None):
-        torch.save(DeepSpeech.serialize(self.net,
-                                        optimizer=self.optimizer,
-                                        amp=amp,
-                                        epoch=self.epoch,
-                                        iteration=self.iter,
-                                        loss_results=self.loss_results,
-                                        wer_results=self.wer_results,
-                                        cer_results=self.cer_results,
-                                        avg_loss=avg_loss),
-                   file_path)
+    def save(self):
+        os.makedirs(parent(self._model_path), exist_ok=True)
+        torch.save(
+            {
+                "epoch": self._epochs.best,
+                "metrics": self._metrics,
+                "optimizer": self._optimizer.state_dict(),
+                "scheduler": self._scheduler,
+                "state_dict": self._model.state_dict(),
+            },
+            self._model_path,
+        )
+        print(f"{self._model_path} saved...")

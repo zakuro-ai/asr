@@ -1,6 +1,13 @@
-# Byte-compiled / optimized / DLL files
-__data__
+filestore 
 etc
+*.sync-conflict*
+*.pt
+*.pth
+*.syncthing
+*.tmp
+*.save
+# Byte-compiled / optimized / DLL files
+*/etc/*
 data/models
 .deps
 SeanNaren
