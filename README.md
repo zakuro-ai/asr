@@ -181,7 +181,7 @@ gdrive(cfg.gdrive_uri)
 ## ETL
 
 ```
-python -m asr_deepspeech.et
+python -m asr_deepspeech.etl
 ```
 
 # Running the application
