@@ -1,3 +1,4 @@
+.vscode
 filestore 
 etc
 *.sync-conflict*
