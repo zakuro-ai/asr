@@ -1,32 +1,125 @@
-![alt text](img/asr.jpeg)
-# ASRDeepspeech (English/Japanese)
+<h1 align="center">
+  <br>
+  <img src="https://drive.google.com/uc?id=17SeD6ijR7DV_EnZGJqavHxVbNHs8n4EQ">
+  <br>
+    ASRDeepspeech x Sakura-ML 
+    (English/Japanese)
+  <br>
+</h1>
+
+<p align="center">
+  <a href="#modules">Modules</a> •
+  <a href="#code-structure">Code structure</a> •
+  <a href="#installing-the-application">Installing the application</a> •
+  <a href="#makefile-commands">Makefile commands</a> •
+  <a href="#environments">Environments</a> •
+  <a href="#dataset">Dataset</a>•
+  <a href="#running-the-application">Running the application</a>•
+  <a href="#notes">Notes</a>•
+</p>
+
 
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
 I have added a configuration file to manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
 
-## Overview
-## ASRDeepspeech modules
+# Modules
 
 At a granular level, ASRDeepSpeech is a library that consists of the following components:
 
 | Component | Description |
 | ---- | --- |
-| **asr_deepspeech** | Speech Recognition package|
-| **asr_deepspeech.data** | Data related module|
-| **asr_deepspeech.data.dataset** | Build the dataset|
-| **asr_deepspeech.data.loaders** | Load the dataet|
-| **asr_deepspeech.data.parsers** | Parse the dataset|
-| **asr_deepspeech.data.samplers** | Sample the dataset|
+| **asr_deepspeech** | Speech Recognition package |
+| **asr_deepspeech.data** | Data related module |
+| **asr_deepspeech.data.dataset** | Build the dataset |
+| **asr_deepspeech.data.loaders** | Load the dataset |
+| **asr_deepspeech.data.parsers** | Parse the dataset |
+| **asr_deepspeech.data.samplers** | Sample the dataset |
 | **asr_deepspeech.decoders** | Decode the generated text |
 | **asr_deepspeech.loggers** | Loggers |
-| **asr_deepspeech.modules** | Components of the network|
-| **asr_deepspeech.parsers** | Arguments parser|
-| **asr_deepspeech.test** | Test units|
+| **asr_deepspeech.modules** | Components of the network |
+| **asr_deepspeech.parsers** | Arguments parser |
+| **asr_deepspeech.tests** | Test units |
 | **asr_deepspeech.trainers** | Trainers |
 
-## Installation
+
+# Code structure
+```python
+from setuptools import setup
+from asr_deepspeech import __version__
+
+setup(
+    name="asr_deepspeech",
+    version=__version__,
+    short_description="ASRDeepspeech (English / Japanese)",
+    long_description="".join(open("README.md", "r").readlines()),
+    long_description_content_type="text/markdown",
+    url="https://github.com/zakuro-ai/asr",
+    license="MIT Licence",
+    author="CADIC Jean-Maximilien",
+    python_requires=">=3.8",
+    packages=[
+        "asr_deepspeech",
+        "asr_deepspeech.audio",
+        "asr_deepspeech.data",
+        "asr_deepspeech.data.dataset",
+        "asr_deepspeech.data.loaders",
+        "asr_deepspeech.data.manifests",
+        "asr_deepspeech.data.parsers",
+        "asr_deepspeech.data.samplers",
+        "asr_deepspeech.decoders",
+        "asr_deepspeech.etl",
+        "asr_deepspeech.loggers",
+        "asr_deepspeech.models",
+        "asr_deepspeech.modules",
+        "asr_deepspeech.parsers",
+        "asr_deepspeech.tests",
+        "asr_deepspeech.trainers",
+    ],
+    include_package_data=True,
+    package_data={"": ["*.yml"]},
+    install_requires=[r.rsplit()[0] for r in open("requirements.txt")],
+    author_email="git@zakuro.ai",
+    description="ASRDeepspeech (English / Japanese)",
+    platforms="linux_debian_10_x86_64",
+    classifiers=[
+        "Programming Language :: Python :: 3.8",
+        "License :: OSI Approved :: MIT License",
+    ],
+)
+
+```
+
+
+# Installing the application
+To clone and run this application, you'll need the following installed on your computer:
+- [Git](https://git-scm.com)
+- Docker Desktop
+   - [Install Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install/)
+   - [Install Docker Desktop on Windows](https://docs.docker.com/desktop/install/windows-install/)
+   - [Install Docker Desktop on Linux](https://docs.docker.com/desktop/install/linux-install/)
+- [Python](https://www.python.org/downloads/)
+
+Install bpd:
+```bash
+# Clone this repository and install the code
+git clone https://github.com/zakuro-ai/asr
+
+# Go into the repository
+cd asr
+```
+
+
+# Makefile commands
+Exhaustive list of make commands:
+```
+pull                # Download the docker image
+sandbox             # Launch the sandox image 
+install_wheels      # Install the wheel
+tests               # Test the code
+```
+# Environments
 We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
  the code. 
 If you decide to run the code locally you will need python3.6 with cuda>=10.1.
@@ -34,29 +127,31 @@ Several libraries are needed to be installed for training to work. I will assume
 an Anaconda installation on Ubuntu, with Pytorch 1.0.
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
-#### Docker
-To build the image with docker, download the pretrained model in japanese and check the `WER/CER` on JSUT test set.
-```Dockerfile
-docker rmi -f jmcadic/deepspeech
-docker build . -t jmcadic/deepspeech
-docker run \
-  --rm \
-  --gpus "device=0" \
-  -it \
-  --shm-size=70g \
-  -v $(pwd):/workspace \
-  -v /srv/sync/:/srv/sync \
-  -v $HOME/.zakuro:/root/.zakuro \
-   jmcadic/deepspeech  python -m asr_deepspeech
+## Docker
+
+> **Note**
+> 
+> Running this application by using Docker is recommended.
+
+To build and run the docker image
+```
+make pull
+make sandbox
 ```
 
+## PythonEnv
 
-#### Local 
-```bash
-sh setup.sh
-python -m asr_deepspeech.test
+> **Warning**
+> 
+> Running this application by using PythonEnv is possible but *not* recommended.
+```
+make install_wheels
 ```
 
+## Test
+```
+make tests
+```
 You should be able to get an output like
 ```python
 =1= TEST PASSED : asr_deepspeech
@@ -73,46 +168,33 @@ You should be able to get an output like
 =1= TEST PASSED : asr_deepspeech.trainers
 ```
 
-## Datasets
+# Datasets
 
-Currently supports JSUT. Please contact me if you want to download the preprocessed files and jp_labels.json.
-```bash
-wget http://ss-takashi.sakura.ne.jp/corpus/jsut_ver1.1.zip
-```
-#### Custom Dataset
+By default we process the JSUT dataset. See the `config` section to know how to process a custom dataset.
+```python
+from gnutools.remote import gdrive
+from asr_deepspech import  cfg
 
-To create a custom dataset you must create json files containing the necessary information about the dataset. `__data__/manifests/{train/val}_jsut.json`
-```json
-{
-    "UT-PARAPHRASE-sent002-phrase1": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
-        "duration": 2.44,
-        "text": "専門には、疎いんだから。"
-    },
-    "UT-PARAPHRASE-sent002-phrase2": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
-        "duration": 2.82,
-        "text": "専門には、詳しくないんだから。"
-    },
-    ...
-}
+# This will download the JSUT dataset in your /tmp
+gdrive(cfg.gdrive_uri)
 ```
+
+# Running the application
 
 ## Training a Model
 
 To train on a single gpu
 ```bash
-python -m asr_deepspeech.trainers
+sakura -m asr_deepspeech.trainers
 ```
 
 ## Pretrained model
-This will load the `config.yml` containing the list of arguments for the inference and run a pretrained model.  
 ```bash
 python -m asr_deepspeech
 ```
 
 
-## Improvements
+# Notes
 <li> Clean verbose during training 
 
 ```

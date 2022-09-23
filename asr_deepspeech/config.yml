@@ -1,0 +1,94 @@
+dst:                        "just"
+lang:                       "jp"
+filestore_id:               1Ze43x3MhhDtwGJAMDfdNTSjm6OcP9QCy
+gdrive_uri:                 "gdrive://{{ *filestore_id }}"
+root_filestore:             /tmp
+
+fq:                         16000
+root:                       "{{ *root_filestore }}/{{ *filestore_id }}"
+landing:                    "{{ *root }}/landing"
+bronze:                     "{{ *root }}/bronze"
+silver:                     "{{ *root }}/silver"
+gold:                       "{{ *root }}/gold"
+var:                        "{{ *root }}/var"
+min_duration:               6
+max_duration:               10
+rnn_hidden_size:            800
+rnn_hidden_layers:          5
+id_dst:                     "{{ *dst }}_{{ *min_duration }}-{{ *max_duration }}"
+id_model:                   "{{ *lang }}-{{ *dst }}_{{ *rnn_hidden_size }}_{{ *rnn_hidden_layers }}"
+
+label_path:                 "{{ *bronze }}/{{ *id_dst }}/labels.csv"
+model_path:                 "{{ *gold }}/{{ *id_model }}.pth"
+
+trainer:
+  model_path:               "{{ *gold }}/{{ *id_model }}.pth"
+  checkpoint_path:          null
+  output_file:              "{{ *var }}/{{ *id_model }}/output.txt"
+  epochs:                   1000
+  device:                   cuda
+  device_test:              cuda
+  mixed_precision:          true
+  overwrite_lr:             null
+
+loaders:
+  train_manifest:           "{{ *bronze }}/{{ *id_dst }}/train.csv"
+  val_manifest:             "{{ *bronze }}/{{ *id_dst }}/test.csv"
+  batch_size:               48
+  num_workers:              16
+  caching:                  false
+
+optim:
+  lr:                       1.5e-4
+  eps:                      1.0e-8
+  betas:                    (0.9, 0.999)
+  weight_decay:             1.0e-5
+  step:                     10
+  gamma:                    0.99
+
+model:
+  id:                       null
+  restart_from:             null
+  label_path:               "{{ *label_path }}"
+  model_path:               "{{ *model_path }}"
+  rnn_hidden_size:          800
+  rnn_hidden_layers:        5
+  rnn_type:                 nn.LSTM
+  context:                  20
+  bidirectional:            true
+  decoder:
+    top_paths:              1
+    beam_width:             10
+    lm_path:                null
+    alpha:                  0.8
+    beta:                   1
+    cutoff_top_n:           40
+    cutoff_prob:            1.0
+    lm_workers:             1
+  audio_conf:
+    sample_rate:            16000
+    window_size:            .02
+    window_stride:          .01
+    window:                 hamming
+    speed_volume_perturb:   false
+    spec_augment:           false
+    noise_dir:              null
+    noise_prob:             0.4
+    noise_min:              0.0
+    noise_max:              0.5
+
+inference:
+  restart_from:             null
+  manifest:                 "{{ *bronze }}/{{ *id_dst }}/test.csv"
+  output_file:              "{{ *var }}/{{ *id_dst }}/output.txt"
+  cuda:                     true
+  half:                     false
+  batch_size:               10
+  num_workers:              32
+
+meta:
+  version:                  v0.3.0
+  root:                     "{{ *gold }}"
+  root_data:                "{{ *gold }}/{{ *id_model }}"
+  output_file:              "{{ *gold }}/{{ *id_model }}/output.txt"
+
