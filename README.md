@@ -1,31 +1,125 @@
-![alt text](img/Training-Deep-Speech.png)
-# ASRDeepspeech (English/Japanese)
+<h1 align="center">
+  <br>
+  <img src="https://drive.google.com/uc?id=17SeD6ijR7DV_EnZGJqavHxVbNHs8n4EQ">
+  <br>
+    ASRDeepspeech x Sakura-ML 
+    (English/Japanese)
+  <br>
+</h1>
+
+<p align="center">
+  <a href="#modules">Modules</a> •
+  <a href="#code-structure">Code structure</a> •
+  <a href="#installing-the-application">Installing the application</a> •
+  <a href="#makefile-commands">Makefile commands</a> •
+  <a href="#environments">Environments</a> •
+  <a href="#dataset">Dataset</a>•
+  <a href="#running-the-application">Running the application</a>•
+  <a href="#notes">Notes</a>•
+</p>
+
 
 This repository offers a clean code version of the original repository from SeanNaren with classes and modular
 components (eg trainers, models, loggers...).
 
-## Overview
-## ASRDeepspeech modules
+I have added a configuration file to manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
+
+# Modules
 
 At a granular level, ASRDeepSpeech is a library that consists of the following components:
 
 | Component | Description |
 | ---- | --- |
-| **asr_deepspeech** | Speech Recognition package|
-| **asr_deepspeech.data** | Data related module|
-| **asr_deepspeech.data.dataset** | Build the dataset|
-| **asr_deepspeech.data.loaders** | Load the dataet|
-| **asr_deepspeech.data.parsers** | Parse the dataset|
-| **asr_deepspeech.data.samplers** | Sample the dataset|
+| **asr_deepspeech** | Speech Recognition package |
+| **asr_deepspeech.data** | Data related module |
+| **asr_deepspeech.data.dataset** | Build the dataset |
+| **asr_deepspeech.data.loaders** | Load the dataset |
+| **asr_deepspeech.data.parsers** | Parse the dataset |
+| **asr_deepspeech.data.samplers** | Sample the dataset |
 | **asr_deepspeech.decoders** | Decode the generated text |
 | **asr_deepspeech.loggers** | Loggers |
-| **asr_deepspeech.models** | Models architecture |
-| **asr_deepspeech.modules** | Components of the network|
-| **asr_deepspeech.parsers** | Arguments parser|
-| **asr_deepspeech.test** | Test units|
+| **asr_deepspeech.modules** | Components of the network |
+| **asr_deepspeech.parsers** | Arguments parser |
+| **asr_deepspeech.tests** | Test units |
 | **asr_deepspeech.trainers** | Trainers |
 
-## Installation
+
+# Code structure
+```python
+from setuptools import setup
+from asr_deepspeech import __version__
+
+setup(
+    name="asr_deepspeech",
+    version=__version__,
+    short_description="ASRDeepspeech (English / Japanese)",
+    long_description="".join(open("README.md", "r").readlines()),
+    long_description_content_type="text/markdown",
+    url="https://github.com/zakuro-ai/asr",
+    license="MIT Licence",
+    author="CADIC Jean-Maximilien",
+    python_requires=">=3.8",
+    packages=[
+        "asr_deepspeech",
+        "asr_deepspeech.audio",
+        "asr_deepspeech.data",
+        "asr_deepspeech.data.dataset",
+        "asr_deepspeech.data.loaders",
+        "asr_deepspeech.data.manifests",
+        "asr_deepspeech.data.parsers",
+        "asr_deepspeech.data.samplers",
+        "asr_deepspeech.decoders",
+        "asr_deepspeech.etl",
+        "asr_deepspeech.loggers",
+        "asr_deepspeech.models",
+        "asr_deepspeech.modules",
+        "asr_deepspeech.parsers",
+        "asr_deepspeech.tests",
+        "asr_deepspeech.trainers",
+    ],
+    include_package_data=True,
+    package_data={"": ["*.yml"]},
+    install_requires=[r.rsplit()[0] for r in open("requirements.txt")],
+    author_email="git@zakuro.ai",
+    description="ASRDeepspeech (English / Japanese)",
+    platforms="linux_debian_10_x86_64",
+    classifiers=[
+        "Programming Language :: Python :: 3.8",
+        "License :: OSI Approved :: MIT License",
+    ],
+)
+
+```
+
+
+# Installing the application
+To clone and run this application, you'll need the following installed on your computer:
+- [Git](https://git-scm.com)
+- Docker Desktop
+   - [Install Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install/)
+   - [Install Docker Desktop on Windows](https://docs.docker.com/desktop/install/windows-install/)
+   - [Install Docker Desktop on Linux](https://docs.docker.com/desktop/install/linux-install/)
+- [Python](https://www.python.org/downloads/)
+
+Install bpd:
+```bash
+# Clone this repository and install the code
+git clone https://github.com/zakuro-ai/asr
+
+# Go into the repository
+cd asr
+```
+
+
+# Makefile commands
+Exhaustive list of make commands:
+```
+pull                # Download the docker image
+sandbox             # Launch the sandox image 
+install_wheels      # Install the wheel
+tests               # Test the code
+```
+# Environments
 We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
  the code. 
 If you decide to run the code locally you will need python3.6 with cuda>=10.1.
@@ -33,22 +127,33 @@ Several libraries are needed to be installed for training to work. I will assume
 an Anaconda installation on Ubuntu, with Pytorch 1.0.
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
-#### Docker
-To build the image with docker
+## Docker
+
+> **Note**
+> 
+> Running this application by using Docker is recommended.
+
+To build and run the docker image
 ```
-docker build . -t jcadic/deepspeech
-docker run --gpus all -it  --shm-size=70g  -v /mnt/.cdata:/mnt/.cdata jcadic/deepspeech bash
+make pull
+make sandbox
 ```
 
+## PythonEnv
 
-#### Local 
+> **Warning**
+> 
+> Running this application by using PythonEnv is possible but *not* recommended.
 ```
-sh setup.sh
-python -m asr_deepspeech.test
+make install_wheels
 ```
 
+## Test
+```
+make tests
+```
 You should be able to get an output like
-```
+```python
 =1= TEST PASSED : asr_deepspeech
 =1= TEST PASSED : asr_deepspeech.data
 =1= TEST PASSED : asr_deepspeech.data.dataset
@@ -57,51 +162,39 @@ You should be able to get an output like
 =1= TEST PASSED : asr_deepspeech.data.samplers
 =1= TEST PASSED : asr_deepspeech.decoders
 =1= TEST PASSED : asr_deepspeech.loggers
-=1= TEST PASSED : asr_deepspeech.models
 =1= TEST PASSED : asr_deepspeech.modules
 =1= TEST PASSED : asr_deepspeech.parsers
 =1= TEST PASSED : asr_deepspeech.test
 =1= TEST PASSED : asr_deepspeech.trainers
 ```
 
-## Datasets
+# Datasets
 
-Currently supports JSUT. Please contact me if you want to download the preprocessed files and jp_labels.json.
-```
-wget http://ss-takashi.sakura.ne.jp/corpus/jsut_ver1.1.zip
-```
-#### Custom Dataset
+By default we process the JSUT dataset. See the `config` section to know how to process a custom dataset.
+```python
+from gnutools.remote import gdrive
+from asr_deepspech import  cfg
 
-To create a custom dataset you must create json files containing the necessary information about the dataset. `__data__/manifests/{train/val}_jsut.json`
+# This will download the JSUT dataset in your /tmp
+gdrive(cfg.gdrive_uri)
 ```
-{
-    "UT-PARAPHRASE-sent002-phrase1": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase1.wav",
-        "duration": 2.44,
-        "text": "専門には、疎いんだから。"
-    },
-    "UT-PARAPHRASE-sent002-phrase2": {
-        "audio_filepath": "/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1/utparaphrase512/wav/UT-PARAPHRASE-sent002-phrase2.wav",
-        "duration": 2.82,
-        "text": "専門には、詳しくないんだから。"
-    },
-    ...
-}
-```
+
+# Running the application
 
 ## Training a Model
 
 To train on a single gpu
+```bash
+sakura -m asr_deepspeech.trainers
 ```
-python asr_deepspeech/trainers/__init__.py  --labels __data__/labels/labels_jp_500.json --manifest jsut --batch-size 30
-```
-To scale to multi-gpu training
-```
-python -m multiproc train.py --manifest [manifest_id] --labels [path_to_labels_json]             
+
+## Pretrained model
+```bash
+python -m asr_deepspeech
 ```
 
 
-## Improvements
+# Notes
 <li> Clean verbose during training 
 
 ```
@@ -135,32 +228,31 @@ clean - 0:00:50 >> 7/1000 (5) | Loss 97.2341 | Lr 0.28e-3 | WER/CER 98.35/98.35 
 <li> Separated text file to check wer/cer with histogram on CER values (best/last/worst result)
 
 ```
-================= 43.52/43.55 =================
+================= 100.00/34.49 =================
 ----- BEST -----
-Ref:や さ し い ほ し は こ た え ま し た
-Hyp:や さ し い ほ し は こ た え ま し た
-WER:0.0  - CER:0.0
+Ref:良ある人ならそんな風にに話しかけないだろう
+Hyp:用ある人ならそんな風にに話しかけないだろう
+WER:100.0  - CER:4.761904761904762
 ----- LAST -----
-Ref:そ れ を 開 き
-Hyp:そ れ け
-WER:60.0  - CER:60.0
+Ref:すみませんがオースチンさんは5日にはです
+Hyp:すみませんがースンさんは一つかにはです
+WER:100.0  - CER:25.0
 ----- WORST -----
-Ref:サ ル ト サ ム ラ イ
-Hyp:死 る と さ む ら い
-WER:100.0  - CER:100.0
+Ref:小切には内がみられる
+Hyp:コには内先金地つ作みが見られる
+WER:100.0  - CER:90.0
 CER histogram
 |###############################################################################
-|█████████████████████████████████████                              144  0-10
-|███████████████████████████████████████████████████████            212  10-20
-|█████████████████████████████████████████████████████████████████  249  20-30
-|█████████████████████████████████████████████████████████          222  30-40
-|███████████████████████████████████████████                        168  40-50
-|████████████████████████████████████████████████████               203  50-60
-|███████████████████████████████████████████                        167  60-70
-|████████████████████████████████                                   126  70-80
-|████████████████████████████                                       110  80-90
-|██████                                                              26  90-100
-|████████████████████                                                78  100-110
+|███████████                                                           6  0-10  
+|███████████████████████████                                          15  10-20 
+|███████████████████████████████████████████████████████████████████  36  20-30 
+|█████████████████████████████████████████████████████████████████    35  30-40 
+|██████████████████████████████████████████████████                   27  40-50 
+|█████████████████████████████                                        16  50-60 
+|█████████                                                             5  60-70 
+|███████████                                                           6  70-80 
+|                                                                      0  80-90 
+|█                                                                     1  90-100
 =============================================
 ```
 

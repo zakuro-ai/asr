@@ -1,4 +1,4 @@
-from gnutools.test import test_imports
+from gnutools.tests import test_imports
 from gnutools.fs import parent
 import os
 import torch

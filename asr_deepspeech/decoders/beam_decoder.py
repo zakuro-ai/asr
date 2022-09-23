@@ -1,7 +1,6 @@
 import torch
 from .decoder import Decoder
 
-
 class BeamCTCDecoder(Decoder):
     def __init__(self, labels, lm_path=None, alpha=0, beta=0, cutoff_top_n=40, cutoff_prob=1.0, beam_width=100,
                  num_processes=4, blank_index=0):
@@ -10,7 +9,7 @@ class BeamCTCDecoder(Decoder):
             from ctcdecode import CTCBeamDecoder
         except ImportError:
             raise ImportError("BeamCTCDecoder requires paddledecoder package.")
-        self._decoder = CTCBeamDecoder(labels, lm_path, alpha, beta, cutoff_top_n, cutoff_prob, beam_width,
+        self.decoder = CTCBeamDecoder(labels, lm_path, alpha, beta, cutoff_top_n, cutoff_prob, beam_width,
                                        num_processes, blank_index)
 
     def convert_to_strings(self, out, seq_len):
@@ -51,7 +50,7 @@ class BeamCTCDecoder(Decoder):
             string: sequences of the model's best guess for the transcription
         """
         probs = probs.cpu()
-        out, scores, offsets, seq_lens = self._decoder.decode(probs, sizes)
+        out, scores, offsets, seq_lens = self.decoder.decode(probs, sizes)
 
         strings = self.convert_to_strings(out, seq_lens)
         offsets = self.convert_tensor(offsets, seq_lens)

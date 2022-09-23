@@ -1,8 +1,7 @@
-llvmlite==0.35.0
 audioread
-scipy==1.5.4
+scipy
 appdirs
-gnutools-python
+gnutools-python>=2.3.2
 python-levenshtein
 torch
 visdom
@@ -12,5 +11,11 @@ tqdm
 matplotlib
 ascii_graph
 tensorboardX
-apex
-ctcdecode
+numba
+numpy>=1.23.3
+PyYaml
+zakuro-ai
+sakura-ml>=0.1.1
+ipywidgets
+pandas
+bpd
