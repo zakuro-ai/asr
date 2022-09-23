@@ -1,9 +1,13 @@
+filestore 
+etc
+*.sync-conflict*
+*.pt
 *.pth
 *.syncthing
 *.tmp
 *.save
 # Byte-compiled / optimized / DLL files
-etc
+*/etc/*
 data/models
 .deps
 SeanNaren
