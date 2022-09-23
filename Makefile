@@ -60,7 +60,7 @@ push_docker_vanilla:
 	docker push $(IMAGE_VANILLA)-$(PACKAGE)_$(VERSION)
 
 # PULL
-pull_dockers: pull_docker_vanilla pull_docker_sandbox
+pull: pull_docker_vanilla pull_docker_sandbox
 
 pull_docker_vanilla:
 	docker pull $(IMAGE_VANILLA)
