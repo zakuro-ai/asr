@@ -1,295 +1,185 @@
-import time
 from tqdm import tqdm
 import torch.utils.data.distributed
-from apex import amp
-from asr_deepspeech import reduce_tensor, check_loss
-from datetime import timedelta
-import numpy as np
-import math
-from argparse import Namespace
+from asr_deepspeech import check_loss
 import os
-
-class DeepSpeechTrainer:
-    def __init__(self,
-                 model,
-                 criterion,
-                 log_dir,
-                 batch_size,
-                 cuda,
-                 num_workers,
-                 epochs,
-                 start_epoch,
-                 silent,
-                 checkpoint_per_batch,
-                 visdom,
-                 tensorboard,
-                 log_params,
-                 finetune,
-                 shuffle,
-                 seed,
-                 train_manifest,
-                 val_manifest,
-                 output_file,
-                 metrics,
-                 optim,
-                 dist,
-                 save_folder=None,
-                 continue_from=None):
-        device = "cuda" if cuda else "cpu"
-        # # Set the criterion
-        self.start_iter = 0
-        self.epoch_time = 0
-        self.lu = 0
-        self.best_cer = None
-        self.data = None
-        self.avg_loss=0
-        self.save_folder = save_folder
-        self.continue_from = continue_from
+from sakura.ml import SakuraTrainer
+from gnutools.fs import parent
 
 
-        self.dist = dist
-        self.optim = optim
-        self.epochs = epochs
-        self.log_dir = log_dir
-        self.silent = silent
-        self.checkpoint_per_batch = checkpoint_per_batch
-        self.visdom = visdom
-        self.tensorboard = tensorboard
-        self.log_params = log_params
-        self.finetune = finetune
-        self.seed = seed
-
-
-        self.device = device
-        self.model = model
-        self.model.to(device)
-        self.audio_conf = self.model.audio_conf
+class DeepSpeechTrainer(SakuraTrainer):
+    def __init__(
+        self,
+        model,
+        criterion,
+        epochs,
+        metrics,
+        optimizer,
+        model_path,
+        checkpoint_path,
+        device,
+        device_test,
+        mixed_precision,
+        output_file,
+        scheduler=None,
+        overwrite_lr=None,
+    ):
+        super(DeepSpeechTrainer, self).__init__(
+            model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            metrics=metrics,
+            epochs=epochs,
+            model_path=model_path,
+            checkpoint_path=checkpoint_path,
+            device=device,
+            device_test=device_test,
+        )
         self.criterion = criterion
-        self.train_manifest = train_manifest
-        self.val_manifest = val_manifest
-        self.num_workers = num_workers
-        self.batch_size = batch_size
-        self.start_epoch = start_epoch
-        self.epoch = start_epoch
-        self.shuffle = shuffle
-        self.main_proc = True
+        self.mixed_precision = mixed_precision
         self.output_file = output_file
-        self.metrics = metrics
-        self.train_loader, self.train_sampler = self.model.get_loader(manifest=self.train_manifest,
-                                                                      batch_size=self.batch_size,
-                                                                      num_workers=self.num_workers)
-        self.test_loader, self.test_sampler = self.model.get_loader(manifest=self.val_manifest,
-                                                                    batch_size=self.batch_size,
-                                                                    num_workers=self.num_workers)
-        self.optimizer = self.get_optimizer()
+        self.overwrite_lr = overwrite_lr
         self.load()
-        self.show()
 
-    def run(self):
-        for self.epoch in range(self.start_epoch, self.epochs):
-            assert self.train()
-            assert self.eval()
-            assert self.update()
+    def run(self, train_loader, test_loader):
+        for self._epoch in self._epochs:
+            self.train(train_loader)
+            self.test(test_loader)
 
-    def show(self):
-        # print(self.net)
-        print("================ VARS ===================")
-        print('id:', self.model.id)
-        print('distributed:', self.dist)
-        print('train_manifest:', self.train_manifest)
-        print('val_manifest:', self.val_manifest)
-        print('continue_from:', self.continue_from)
-        print('save_folder:', self.save_folder)
-        print('output_file:', self.output_file)
-        print('main_proc:', self.main_proc)
-        print("==========================================")
-
-    def get_optimizer(self):
-        self.model = self.model.to(self.device)
-        optimizer = torch.optim.SGD(self.model.parameters(),
-                                    lr=self.optim.lr,
-                                    momentum=self.optim.momentum,
-                                    nesterov=self.optim.nesterov,
-                                    weight_decay=self.optim.weight_decay)
-
-        self.model, optimizer = amp.initialize(self.model,
-                                               optimizer,
-                                               opt_level=self.optim.opt_level,
-                                               keep_batchnorm_fp32=self.optim.keep_batchnorm_fp32,
-                                               loss_scale=self.optim.loss_scale)
-        return optimizer
-
-
+    def checkpoint(self):
+        if self._metrics.test.current == self._metrics.test.best:
+            self.save()
 
     def description(self):
-        id = self.model.id
-        lr = self.optimizer.param_groups[0]["lr"]
-        tdelta = timedelta(seconds=int(self.epoch_time))
-        epoch = self.epoch + 1
-        epochs = self.epochs
-        lu = self.lu + 1
-        avg_loss = self.average_loss()
-        c = len(self.metrics.wer)>0
-        wer = self.metrics.wer[-1] if c else None
-        cer = self.metrics.cer[-1] if c else None
-        best_wer = min(self.metrics.wer) if c else None
-        best_cer = min(self.metrics.cer) if c else None
+        lr = self._optimizer.param_groups[0]["lr"] * pow(10, 5)
+        current, best = self._metrics.test.current, self._metrics.test.best
+        tcurrent, tbest = self._metrics.train.current, self._metrics.train.best
+        suffix = f" | CER: {current.cer:.4f} / ({best.cer:.4f})"
+        suffix += f" | Loss:{tcurrent.loss:.4f} / ({tbest.loss:.4f})"
+        return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | Epoch: {self._epochs.current}/{self._epochs.total}"
 
-        __description__ = ' | '.join([
-            f'{id} - {tdelta} >> {epoch}/{epochs} ({lu})',
-            f'Lr {lr*pow(10,5):.3f}*e-5',
-            f'Loss {avg_loss:.4f}' if avg_loss is not None else '',
-            f'WER/CER {wer:.2f}/{cer:.2f} - ({best_wer:.2f}/[{best_cer:.2f}])'
-            if self.best_cer is not None else ''
-        ])
-        return __description__
+    def train(self, train_loader):
+        self._model.train()
+        self._model.to(self._device)
+        self.optimizer_to(self._optimizer, self._device)
+        current, best = self._metrics.train.current, self._metrics.train.best
+        loader = train_loader
+        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
 
-    def average_loss(self):
-        try:
-            avg_loss = np.mean(np.array(self.metrics.loss)[:self.epoch])
-            assert not math.isnan(avg_loss)
-            return avg_loss
-        except AssertionError:
-            pass
+        for iter, data in tqdm(
+            enumerate(loader, start=0), total=len(loader), desc=self.description()
+        ):
 
-    def train(self):
-        self.avg_loss=0
-        self.manifest = self.train_manifest
-        self.model.train()
-        self.end, self.epoch_valid = time.time(), False
-        start_epoch_time  = time.time()
-        for self.iter, (self.data) in tqdm(enumerate(self.train_loader, start=self.start_iter),
-                                           total=len(self.train_loader),
-                                           desc=self.description()):
-            if self.iter == len(self.train_sampler):
-                break
+            if self.mixed_precision:
+                with torch.cuda.amp.autocast():
+                    valid_loss, loss, loss_value = self.fit(data)
             else:
-                self.fit()
+                valid_loss, loss, loss_value = self.fit(data)
 
-        self.avg_loss /= len(self.train_sampler)
-        self.metrics.loss.append(self.avg_loss)
-        self.epoch_time = time.time() - start_epoch_time
-        return True #self.epoch_valid
+            if valid_loss:
+                self._optimizer.zero_grad()
+                if self.mixed_precision:
+                    scaler.scale(loss).backward()
+                    scaler.step(self._optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    self._optimizer.step()
+                current.loss += loss_value
+            else:
+                print("Loss non valid, skipped")
+                pass
 
-    def fit(self):
+        self.update(current, best, loader, update_best=False)
+        self._scheduler.step() if self._scheduler is not None else None
 
-        inputs, targets, input_percentages, target_sizes = self.data
+    def fit(self, data):
+        inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
         # measure data loading time
-        inputs = inputs.to('cuda')
-
-
-        out, output_sizes = self.model.forward(inputs, input_sizes)
-
+        inputs = inputs.to(self._device)
+        out, output_sizes = self._model.forward(inputs, input_sizes)
         out = out.transpose(0, 1)  # TxNxH
         float_out = out.float()  # ensure float32 for loss
         float_out = float_out.log_softmax(2)
-        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to('cuda')
+        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(
+            self._device
+        )
         loss = loss / inputs.size(0)  # average the loss by minibatch
 
-        # Check to ensure valid loss was calculated
-        self.epoch_valid = max(self.epoch_valid, self.step(loss))
-        # Checkpoint if necessary
-        # self.checkpoint_batch()
-        del loss, out, float_out
-
-    def step(self, loss):
-        if self.dist is not None:#distributed:
-            loss = loss.to(self.device)
-            loss_value = reduce_tensor(loss, self.dist.world_size).item()
-        else:
-            loss_value = loss.item()
-
+        # Check the loss
+        loss_value = loss.item()
         valid_loss, error = check_loss(loss, loss_value)
-        if valid_loss:
-            self.optimizer.zero_grad()
-            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                scaled_loss.backward()
-            torch.nn.utils.clip_grad_norm_(amp.master_params(self.optimizer), self.optim.max_norm)
-            self.optimizer.step()
-        else:
-            print(error)
-            print('Skipping grad update')
-            return False
+        return valid_loss, loss, loss_value
 
-        self.avg_loss += loss_value
-        return True
+    def test(self, test_loader):
+        current, best = self._metrics.test.current, self._metrics.test.best
+        loader = test_loader
+        wer, cer, _ = self._model(
+            loader=loader, device=self._device_test, output_file=self.output_file
+        )
+        current.wer, current.cer = wer, cer
+        self.update(current, best, loader, update_best=True)
+        self.checkpoint()
 
-    def eval(self):
-        with torch.no_grad():
-            self.start_iter = 0  # Reset start iteration for next epoch
-            wer, cer, _ = self.model(loader=self.test_loader,
-                                     output_file=self.output_file)
-            self.metrics.wer.append(wer)
-            self.metrics.cer.append(cer)
-            return True
-
-    def update(self, save=True):
-        # Update the board
-        values = {
-            'loss_results': self.metrics.loss,
-            'cer_results': self.metrics.cer,
-            'wer_results': self.metrics.wer
-        }
-        if self.visdom and self.main_proc:
-            self.model.visdom_logger.update(self.epoch, values)
-        if self.tensorboard and self.main_proc:
-            self.model.tensorboard_logger.update(self.epoch, values, self.model.named_parameters())
-            self.model.values = {
-                'Avg Train Loss': self.avg_loss,
-                'Avg WER': self.metrics.wer[-1],
-                'Avg CER': self.metrics.cer[-1],
-            }
-        condition_best = False
-        # Update the conditions the save
+    def update(self, current, best, loader, update_best=False):
+        current.loss /= len(loader.dataset)
         try:
-            assert self.best_cer is not None
-            assert self.best_cer < self.metrics.cer[-1]
+            assert best.cer is not None
+            assert best.cer < current.cer
         except AssertionError:
-            condition_best = True
+            vars(best).update(vars(current))
+            if update_best:
+                self._epochs.best = self._epochs.current
 
-        # Save the model
-        try:
-            assert save
-            ckpt_path = f'{self.save_folder}/{self.model.id}-{self.epoch+1}.ckpt.pth'
-            files = [(ckpt_path, condition_best), (self.model.model_path, condition_best)]
-            for file, c in files:
-                self.save(file_path=file) if c else None
-        except AssertionError:
-            pass
+    @staticmethod
+    def optimizer_to(optim, device):
+        for param in optim.state.values():
+            # Not sure there are any global tensors in the state dict
+            if isinstance(param, torch.Tensor):
+                param.data = param.data.to(device)
+                if param._grad is not None:
+                    param._grad.data = param._grad.data.to(device)
+            elif isinstance(param, dict):
+                for subparam in param.values():
+                    if isinstance(subparam, torch.Tensor):
+                        subparam.data = subparam.data.to(device)
+                        if subparam._grad is not None:
+                            subparam._grad.data = subparam._grad.data.to(device)
 
-        if condition_best:
-            self.best_wer = np.min(self.metrics.wer)
-            self.best_cer = np.min(self.metrics.cer)
-            self.lu = np.argmin(self.metrics.cer)
+    def load(self, all=True):
+        model_path = self._model_path
+        if os.path.exists(model_path):
+            ckpt = torch.load(model_path, map_location="cpu")
+            self._model.load_state_dict(ckpt["state_dict"])
+            if all:
+                self._optimizer.load_state_dict(ckpt["optimizer"])
+                if self.overwrite_lr is not None:
+                    self._optimizer.param_groups[0]["lr"] = self.overwrite_lr
+                self._scheduler = (
+                    ckpt["scheduler"]
+                    if ckpt["scheduler"] is not None
+                    else self._scheduler
+                )
+                if self._scheduler is not None:
+                    self._scheduler.optimizer = self._optimizer
+            self._metrics = ckpt["metrics"]
+            self._epochs.start, self._epochs.current, self._epochs.best = (
+                ckpt["epoch"],
+                ckpt["epoch"],
+                ckpt["epoch"],
+            )
+            print(f"restart from {model_path}")
 
-        # anneal lr
-        for g in self.optimizer.param_groups:
-            g['lr'] = g['lr'] / self.optim.learning_anneal
-
-        self.train_sampler.shuffle() if self.shuffle else None
-
-        return True
-
-    def load(self):
-        try:
-            assert self.continue_from is not None
-            assert os.path.exists(self.continue_from)
-            ckpt = Namespace(**torch.load(self.continue_from))
-            self.metrics = ckpt.metrics
-            self.optim = ckpt.optim
-            self.optimizer = ckpt.optimizer
-            self.model.load_state_dict(ckpt.state_dict)
-            self.update(save=False)
-            self.start_epoch = self.lu+1
-        except:
-            pass
-
-    def save(self, file_path):
-        torch.save({
-            "metrics": self.metrics,
-            "optim": self.optim,
-            "optimizer": self.optimizer,
-            "state_dict": self.model.state_dict()
-        }, file_path)
-
+    def save(self):
+        os.makedirs(parent(self._model_path), exist_ok=True)
+        torch.save(
+            {
+                "epoch": self._epochs.best,
+                "metrics": self._metrics,
+                "optimizer": self._optimizer.state_dict(),
+                "scheduler": self._scheduler,
+                "state_dict": self._model.state_dict(),
+            },
+            self._model_path,
+        )
+        print(f"{self._model_path} saved...")
