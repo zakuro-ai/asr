@@ -178,6 +178,11 @@ from asr_deepspech import  cfg
 # This will download the JSUT dataset in your /tmp
 gdrive(cfg.gdrive_uri)
 ```
+## ETL
+
+```
+python -m asr_deepspeech.et
+```
 
 # Running the application
 
