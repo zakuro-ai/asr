@@ -1,15 +1,14 @@
 import torch
 from torch import nn
-import scipy.signal
+import scipy.signal.windows as _windows
 
-N =-1
-windows =\
-    {
-        'hamming': scipy.signal.hamming,
-        'hann': scipy.signal.hann,
-        'blackman': scipy.signal.blackman,
-        'bartlett': scipy.signal.bartlett
-    }
+N = -1
+windows = {
+    'hamming': _windows.hamming,
+    'hann': _windows.hann,
+    'blackman': _windows.blackman,
+    'bartlett': _windows.bartlett,
+}
 
 torch.manual_seed(123456)
 torch.cuda.manual_seed_all(123456)

@@ -1,4 +1,4 @@
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 import os
 
 from gnutools import fs
@@ -8,5 +8,5 @@ from .vars import *
 
 try:
     cfg = fs.load_config(os.environ["ZAK_ASR_CONFIG"])
-except:
+except Exception:
     cfg = fs.load_config(f"{fs.parent(__file__)}/config.yml")

@@ -1,0 +1,100 @@
+name: Auto-release
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "notebooks/**"
+      - ".github/workflows/*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  bump-and-release:
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          set -euo pipefail
+          CURRENT=$(grep -E '^__version__ = ' asr_deepspeech/__init__.py | sed -E 's/.*"([^"]+)".*/\1/')
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "  current: $CURRENT"
+          echo "  new    : $NEW"
+          sed -i.bak -E "s/^__version__ = \".*\"/__version__ = \"$NEW\"/" asr_deepspeech/__init__.py
+          rm asr_deepspeech/__init__.py.bak
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Commit + tag
+        run: |
+          set -euo pipefail
+          git add asr_deepspeech/__init__.py
+          git commit -m "chore(release): v${{ steps.bump.outputs.new_version }} [skip release]"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            --title "${{ steps.bump.outputs.tag }}" \
+            --generate-notes
+
+  publish-pypi:
+    needs: bump-and-release
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-and-release.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Build wheel + sdist
+        run: |
+          uv venv .venv
+          uv pip install --python .venv/bin/python hatchling build twine
+          .venv/bin/python -m build --outdir dist
+
+      - name: Publish to PyPI (API token)
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TWINE_PASSWORD:-}" ]; then
+            echo "::error::PYPI_API_TOKEN secret is not set on the 'release' environment."
+            exit 1
+          fi
+          .venv/bin/python -m twine upload dist/* --non-interactive
