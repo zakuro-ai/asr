@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.18"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dev deps
+        run: uv pip install -e ".[dev]" --system
+      - name: ruff check
+        run: ruff check .
+      - name: ruff format check
+        run: ruff format --check .
+      - name: mypy
+        run: mypy asr_deepspeech
+
+  test:
+    name: Unit tests (CPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.18"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install deps
+        run: uv pip install -e ".[dev]" --system
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+      - name: Run tests (CPU only)
+        run: pytest -m "not gpu and not slow" --cov=asr_deepspeech --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+        continue-on-error: true

@@ -21,7 +21,7 @@ def _collate_fn(batch):
         target_sizes[i] = len(target)
         targets.extend(target)
 
-    return inputs, torch.IntTensor(targets), input_percentages, target_sizes
+    return inputs, torch.tensor(targets, dtype=torch.int32), input_percentages, target_sizes
 
 
 def reduce_tensor(tensor, world_size, reduce_op_max=False):

@@ -2,50 +2,118 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
 [project]
 name = "asr-deepspeech"
 dynamic = ["version"]
-description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
+description = "DeepSpeech2 ASR in PyTorch — English & Japanese, backed by Zakuro AI"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro.ai" }]
-requires-python = ">=3.9"
-keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
+requires-python = ">=3.10"
+keywords = ["asr", "speech-recognition", "deepspeech", "japanese", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Environment :: GPU :: NVIDIA CUDA",
 ]
 dependencies = [
     "scipy>=1.10",
     "gnutools-python>=2.3.2",
     "python-levenshtein",
-    "torch",
-    "librosa",
+    "torch>=2.0",
+    "librosa>=0.10",
     "tqdm",
     "matplotlib",
-    "numpy>=1.23.3",
+    "numpy>=1.23",
     "PyYaml",
     "zakuro-ai",
     "sakura-ml>=0.1.1",
-    "ipywidgets",
     "pandas",
     "soundfile",
     "scikit-learn",
     "protobuf>=3.20.2",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-PyYAML",
+    "numpy",          # for mypy stubs
+]
+
 [project.urls]
 Repository = "https://github.com/zakuro-ai/asr"
 
+[project.scripts]
+asr-train = "asr_deepspeech.trainers.train:main"
+asr-etl   = "asr_deepspeech.etl.run:main"
+
+# ---------------------------------------------------------------------------
+# Hatch
+# ---------------------------------------------------------------------------
 [tool.hatch.version]
 path = "asr_deepspeech/__init__.py"
 pattern = '__version__ = "(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "asr_deepspeech",
-]
+packages = ["asr_deepspeech"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "asr_deepspeech/config.yml" = "asr_deepspeech/config.yml"
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths  = ["tests"]
+addopts    = "-v --tb=short --cov=asr_deepspeech --cov-report=term-missing --cov-report=xml"
+markers    = [
+    "gpu: requires CUDA GPU (deselect with -m 'not gpu')",
+    "slow: long-running test",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # allow assert in tests
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = false
+check_untyped_defs = true
+exclude = ["tests/", "notebooks/"]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["asr_deepspeech"]
+omit   = ["*/tests/*", "*/__main__.py", "*/multiproc.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

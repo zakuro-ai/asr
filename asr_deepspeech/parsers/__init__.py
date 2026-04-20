@@ -1,1 +1,1 @@
-from .default_parser import add_decoder_args, add_inference_args, parser, parse_kwargs
+from .default_parser import add_decoder_args, build_parser

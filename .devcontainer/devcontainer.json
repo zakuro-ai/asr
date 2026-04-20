@@ -1,0 +1,33 @@
+{
+  "name": "asr-deepspeech",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--gpus", "all",
+    "--shm-size", "8g"
+  ],
+  "mounts": [
+    "source=${localEnv:HOME}/data,target=/home/user/data,type=bind,consistency=cached"
+  ],
+  "remoteUser": "user",
+  "postCreateCommand": "uv pip install -e '.[dev]'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.mypy-type-checker",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/home/user/.venv/bin/python",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  }
+}
