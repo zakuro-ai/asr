@@ -124,7 +124,7 @@ class DeepSpeechTrainer(SakuraTrainer):
 
     def test(self, test_loader):
         current, best = self._metrics.test.current, self._metrics.test.best
-        wer, cer, _ = self._model(
+        wer, cer, _ = self._model.evaluate(
             loader=test_loader, device=self._device_test, output_file=self.output_file
         )
         current.wer, current.cer = wer, cer
@@ -132,7 +132,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.checkpoint()
 
     def update(self, current, best, loader, update_best=False):
-        current.loss /= len(loader.dataset)
+        # Normalize by number of batches (loss was already averaged per sample in fit())
+        current.loss /= max(len(loader), 1)
         try:
             assert best.cer is not None
             assert best.cer < current.cer

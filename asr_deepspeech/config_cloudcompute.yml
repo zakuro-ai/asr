@@ -47,7 +47,7 @@ optim:
   gamma:                    0.99
 
 model:
-  id:                       null
+  id:                       "jp-jsut"
   restart_from:             null
   label_path:               "{{ *label_path }}"
   model_path:               "{{ *model_path }}"

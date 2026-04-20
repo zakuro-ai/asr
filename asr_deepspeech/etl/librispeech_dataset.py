@@ -44,7 +44,7 @@ class LibriSpeechDataset:
                 rel = os.path.relpath(src_path, landing)
                 dst_path = os.path.join(bronze, rel)
                 os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-                if not os.path.exists(dst_path):
+                if not os.path.exists(dst_path) and not os.path.islink(dst_path):
                     os.symlink(os.path.abspath(src_path), dst_path)
                 records.append((dst_path, dur, self._fq, text, len(text)))
 
