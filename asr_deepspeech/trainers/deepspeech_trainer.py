@@ -1,6 +1,7 @@
 import os
 
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 
 from asr_deepspeech import check_loss
@@ -24,6 +25,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         output_file,
         scheduler=None,
         overwrite_lr=None,
+        max_norm: float = 400.0,
+        compile_model: bool = False,
     ):
         super().__init__(
             model,
@@ -40,6 +43,15 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.mixed_precision = mixed_precision
         self.output_file = output_file
         self.overwrite_lr = overwrite_lr
+        self.max_norm = max_norm
+
+        self._use_amp = mixed_precision and str(device) != "cpu"
+        # GradScaler is created once so it accumulates loss-scale history across epochs.
+        self._scaler = torch.amp.GradScaler("cuda") if self._use_amp else None
+
+        if compile_model:
+            self._model = torch.compile(self._model)
+
         self.load()
 
     def run(self, train_loader, test_loader):
@@ -69,11 +81,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
 
-        use_amp = self.mixed_precision and self._device != "cpu"
-        scaler = torch.amp.GradScaler("cuda") if use_amp else None
-
         for data in tqdm(train_loader, total=len(train_loader), desc=self.description()):
-            if use_amp:
+            if self._use_amp:
                 with torch.amp.autocast("cuda"):
                     valid_loss, loss, loss_value = self.fit(data)
             else:
@@ -81,12 +90,15 @@ class DeepSpeechTrainer(SakuraTrainer):
 
             if valid_loss:
                 self._optimizer.zero_grad()
-                if use_amp:
-                    scaler.scale(loss).backward()
-                    scaler.step(self._optimizer)
-                    scaler.update()
+                if self._use_amp:
+                    self._scaler.scale(loss).backward()
+                    self._scaler.unscale_(self._optimizer)
+                    nn.utils.clip_grad_norm_(self._model.parameters(), self.max_norm)
+                    self._scaler.step(self._optimizer)
+                    self._scaler.update()
                 else:
                     loss.backward()
+                    nn.utils.clip_grad_norm_(self._model.parameters(), self.max_norm)
                     self._optimizer.step()
                 current.loss += loss_value
             else:
@@ -106,7 +118,7 @@ class DeepSpeechTrainer(SakuraTrainer):
         loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(self._device)
         loss = loss / inputs.size(0)
         loss_value = loss.item()
-        valid_loss, error = check_loss(loss, loss_value)
+        valid_loss, _ = check_loss(loss, loss_value)
         return valid_loss, loss, loss_value
 
     def test(self, test_loader):
@@ -153,6 +165,8 @@ class DeepSpeechTrainer(SakuraTrainer):
                 self._scheduler = ckpt.get("scheduler", self._scheduler)
                 if self._scheduler is not None:
                     self._scheduler.optimizer = self._optimizer
+                if ckpt.get("scaler") is not None and self._scaler is not None:
+                    self._scaler.load_state_dict(ckpt["scaler"])
             self._metrics = ckpt["metrics"]
             epoch = ckpt["epoch"]
             self._epochs.start = self._epochs.current = self._epochs.best = epoch
@@ -166,6 +180,7 @@ class DeepSpeechTrainer(SakuraTrainer):
                 "metrics": self._metrics,
                 "optimizer": self._optimizer.state_dict(),
                 "scheduler": self._scheduler,
+                "scaler": self._scaler.state_dict() if self._scaler is not None else None,
                 "state_dict": self._model.state_dict(),
             },
             self._model_path,

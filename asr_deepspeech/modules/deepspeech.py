@@ -157,14 +157,14 @@ class DeepSpeech(nn.Module):
         x = self.inference_softmax(x)
         return x, output_lengths
 
-    def get_loader(self, manifest, batch_size, num_workers, caching=False):
+    def get_loader(self, manifest, batch_size, num_workers, cache_dir=None):
         return get_loader(
             self.audio_conf,
             self.labels,
             manifest,
             batch_size,
             num_workers,
-            caching=caching,
+            cache_dir=cache_dir,
         )
 
     def __call__(

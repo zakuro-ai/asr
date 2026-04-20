@@ -69,7 +69,8 @@ class BatchRNN(nn.Module):
     def forward(self, x, output_lengths):
         if self.batch_norm is not None:
             x = self.batch_norm(x)
-        x = nn.utils.rnn.pack_padded_sequence(x, output_lengths)
+        # pack_padded_sequence requires lengths on CPU
+        x = nn.utils.rnn.pack_padded_sequence(x, output_lengths.cpu())
         x, _ = self.rnn(x)
         x, _ = nn.utils.rnn.pad_packed_sequence(x)
         if self._bidirectional:

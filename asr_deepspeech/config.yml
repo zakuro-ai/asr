@@ -11,6 +11,7 @@ bronze:                     "{{ *root }}/bronze"
 silver:                     "{{ *root }}/silver"
 gold:                       "{{ *root }}/gold"
 var:                        "{{ *root }}/var"
+cache:                      "{{ *root }}/cache"
 min_duration:               6
 max_duration:               10
 rnn_hidden_size:            800
@@ -36,12 +37,12 @@ loaders:
   val_manifest:             "{{ *bronze }}/{{ *id_dst }}/test.csv"
   batch_size:               48
   num_workers:              16
-  caching:                  false
+  cache_dir:                "{{ *cache }}/spectrograms"
 
 optim:
   lr:                       1.5e-4
   eps:                      1.0e-8
-  betas:                    (0.9, 0.999)
+  betas:                    [0.9, 0.999]
   weight_decay:             1.0e-5
   step:                     10
   gamma:                    0.99
