@@ -67,9 +67,10 @@ class DeepSpeechTrainer(SakuraTrainer):
         lr = self._optimizer.param_groups[0]["lr"] * 1e5
         cur, best = self._metrics.test.current, self._metrics.test.best
         tcur, tbest = self._metrics.train.current, self._metrics.train.best
+        cer_str = f"{cur.cer:.4f}/({best.cer:.4f})" if cur.cer is not None else "n/a"
         return (
             f"({self._epochs.best}) {self._model.id}"
-            f" | CER: {cur.cer:.4f}/({best.cer:.4f})"
+            f" | CER: {cer_str}"
             f" | Loss: {tcur.loss:.4f}/({tbest.loss:.4f})"
             f" | Lr: {lr:.4f}e-5"
             f" | Epoch: {self._epochs.current}/{self._epochs.total}"

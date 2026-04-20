@@ -3,10 +3,9 @@ from torch.nn import CTCLoss
 from torch.optim.lr_scheduler import StepLR
 
 from asr_deepspeech import cfg
+from asr_deepspeech.metrics import asr_metrics
 from asr_deepspeech.modules import DeepSpeech
 from asr_deepspeech.trainers import DeepSpeechTrainer
-from sakura import asr_metrics
-from sakura.ml import AsyncTrainer
 
 if __name__ == "__main__":
     model = DeepSpeech(**vars(cfg.model))
@@ -39,8 +38,7 @@ if __name__ == "__main__":
         criterion=CTCLoss(reduction="sum"),
         optimizer=optimizer,
         scheduler=scheduler,
-        metrics=asr_metrics,
+        metrics=asr_metrics(),
         **vars(cfg.trainer),
     )
-    trainer = AsyncTrainer(trainer=trainer)
     trainer.run(train_loader=train_loader, test_loader=test_loader)

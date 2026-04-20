@@ -1,9 +1,10 @@
 import os
 import subprocess
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import soundfile as sf
-from gnutools.concurrent import ProcessPoolExecutorBar
 from gnutools.fs import listfiles, parent
+from tqdm import tqdm
 
 from asr_deepspeech.audio import duration
 
@@ -24,8 +25,7 @@ class WAVConverter:
         return sf.info(path).samplerate
 
     @staticmethod
-    def main(audio_file: str, src: str, dst: str, fq: int, overwrite: bool):
-        # Map source extension → .wav in destination
+    def _convert(audio_file: str, src: str, dst: str, fq: int, overwrite: bool):
         rel = os.path.relpath(audio_file, src)
         wav_output = os.path.join(dst, os.path.splitext(rel)[0] + ".wav")
         already_ok = (
@@ -46,14 +46,17 @@ class WAVConverter:
             raise RuntimeError(f"Unexpected sample rate in {wav_output}")
         return wav_output, duration(wav_output)
 
-    def run(self):
+    def run(self, max_workers: int = os.cpu_count()):
         audio_files = [
             f for f in listfiles(self._src)
             if os.path.splitext(f)[1].lower() in self.EXTENSIONS
         ]
-        bar = ProcessPoolExecutorBar()
-        bar.submit([
-            (WAVConverter.main, f, self._src, self._dst, self._fq, self._overwrite)
-            for f in audio_files
-        ])
-        return bar._results
+        results = []
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(WAVConverter._convert, f, self._src, self._dst, self._fq, self._overwrite): f
+                for f in audio_files
+            }
+            for fut in tqdm(as_completed(futures), total=len(futures), desc="Converting audio"):
+                results.append(fut.result())
+        return results
