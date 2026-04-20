@@ -1,22 +1,16 @@
-audioread
-scipy
-appdirs
+scipy>=1.10
 gnutools-python>=2.3.2
 python-levenshtein
 torch
-visdom
-wget
 librosa
 tqdm
 matplotlib
-ascii_graph
-tensorboardX
-numba
 numpy>=1.23.3
 PyYaml
 zakuro-ai
 sakura-ml>=0.1.1
 ipywidgets
 pandas
-bpd
-protobuf>=3.20.2 # not directly required, pinned by Snyk to avoid a vulnerability
+soundfile
+scikit-learn
+protobuf>=3.20.2

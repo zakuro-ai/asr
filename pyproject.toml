@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "asr-deepspeech"
+dynamic = ["version"]
+description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro.ai" }]
+requires-python = ">=3.9"
+keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "scipy>=1.10",
+    "gnutools-python>=2.3.2",
+    "python-levenshtein",
+    "torch",
+    "librosa",
+    "tqdm",
+    "matplotlib",
+    "numpy>=1.23.3",
+    "PyYaml",
+    "zakuro-ai",
+    "sakura-ml>=0.1.1",
+    "ipywidgets",
+    "pandas",
+    "soundfile",
+    "scikit-learn",
+    "protobuf>=3.20.2",
+]
+
+[project.urls]
+Repository = "https://github.com/zakuro-ai/asr"
+
+[tool.hatch.version]
+path = "asr_deepspeech/__init__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "asr_deepspeech",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"asr_deepspeech/config.yml" = "asr_deepspeech/config.yml"
