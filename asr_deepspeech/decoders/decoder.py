@@ -1,69 +1,31 @@
 import Levenshtein as Lev
 
-class Decoder(object):
-    """
-    Basic decoder class from which all other decoders inherit. Implements several
-    helper functions. Subclasses should implement the decode() method.
 
-    Arguments:
-        labels (string): mapping from integers to characters.
-        blank_index (int, optional): index for the blank '_' character. Defaults to 0.
-        space_index (int, optional): index for the space ' ' character. Defaults to 28.
+class Decoder:
+    """Base decoder. Subclasses must implement decode().
+
+    Args:
+        labels: dict mapping char → int (as produced by the label CSV loader).
+        blank_index: CTC blank token index (default 0).
     """
 
-    def __init__(self, labels, blank_index=0):
-        # e.g. labels = "_'ABCDEFGHIJKLMNOPQRSTUVWXYZ#"
+    def __init__(self, labels: dict, blank_index: int = 0):
         self.labels = labels
-        self.int_to_char = dict([(i, c) for (i, c) in enumerate(labels)])
+        self.int_to_char = {v: k for k, v in labels.items()}
         self.blank_index = blank_index
-        space_index = len(labels)  # To prevent errors in decode, we add an out of bounds index for the space
-        if ' ' in labels:
-            space_index = labels.index(' ')
-        self.space_index = space_index
+        self.space_index = labels.get(" ", len(labels))
 
-    def wer(self, s1, s2):
-        """
-        Computes the Word Error Rate, defined as the edit distance between the
-        two provided sentences after tokenizing to words.
-        Arguments:
-            s1 (string): space-separated sentence
-            s2 (string): space-separated sentence
-        """
+    def wer(self, s1: str, s2: str) -> int:
+        """Word Error Rate as edit distance on word-encoded strings."""
+        vocab = set(s1.split()) | set(s2.split())
+        word2char = {w: chr(i) for i, w in enumerate(vocab)}
+        w1 = "".join(word2char[w] for w in s1.split())
+        w2 = "".join(word2char[w] for w in s2.split())
+        return Lev.distance(w1, w2)
 
-        # build mapping of words to integers
-        b = set(s1.split() + s2.split())
-        word2char = dict(zip(b, range(len(b))))
-
-        # map the words to a char array (Levenshtein packages only accepts
-        # strings)
-        w1 = [chr(word2char[w]) for w in s1.split()]
-        w2 = [chr(word2char[w]) for w in s2.split()]
-
-        return Lev.distance(''.join(w1), ''.join(w2))
-
-    def cer(self, s1, s2):
-        """
-        Computes the Character Error Rate, defined as the edit distance.
-
-        Arguments:
-            s1 (string): space-separated sentence
-            s2 (string): space-separated sentence
-        """
-        s1, s2, = s1.replace(' ', ''), s2.replace(' ', '')
-        return Lev.distance(s1, s2)
+    def cer(self, s1: str, s2: str) -> int:
+        """Character Error Rate as edit distance ignoring spaces."""
+        return Lev.distance(s1.replace(" ", ""), s2.replace(" ", ""))
 
     def decode(self, probs, sizes=None):
-        """
-        Given a matrix of character probabilities, returns the decoder's
-        best guess of the transcription
-
-        Arguments:
-            probs: Tensor of character probabilities, where probs[c,t]
-                            is the probability of character c at time t
-            sizes(optional): Size of each sequence in the mini-batch
-        Returns:
-            string: sequence of the model's best guess for the transcription
-        """
         raise NotImplementedError
-
-

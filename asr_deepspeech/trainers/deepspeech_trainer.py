@@ -1,9 +1,11 @@
-from tqdm import tqdm
-import torch.utils.data.distributed
-from asr_deepspeech import check_loss
 import os
-from sakura.ml import SakuraTrainer
+
+import torch
+from tqdm import tqdm
+
+from asr_deepspeech import check_loss
 from gnutools.fs import parent
+from sakura.ml import SakuraTrainer
 
 
 class DeepSpeechTrainer(SakuraTrainer):
@@ -23,7 +25,7 @@ class DeepSpeechTrainer(SakuraTrainer):
         scheduler=None,
         overwrite_lr=None,
     ):
-        super(DeepSpeechTrainer, self).__init__(
+        super().__init__(
             model,
             optimizer=optimizer,
             scheduler=scheduler,
@@ -50,34 +52,36 @@ class DeepSpeechTrainer(SakuraTrainer):
             self.save()
 
     def description(self):
-        lr = self._optimizer.param_groups[0]["lr"] * pow(10, 5)
-        current, best = self._metrics.test.current, self._metrics.test.best
-        tcurrent, tbest = self._metrics.train.current, self._metrics.train.best
-        suffix = f" | CER: {current.cer:.4f} / ({best.cer:.4f})"
-        suffix += f" | Loss:{tcurrent.loss:.4f} / ({tbest.loss:.4f})"
-        return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | Epoch: {self._epochs.current}/{self._epochs.total}"
+        lr = self._optimizer.param_groups[0]["lr"] * 1e5
+        cur, best = self._metrics.test.current, self._metrics.test.best
+        tcur, tbest = self._metrics.train.current, self._metrics.train.best
+        return (
+            f"({self._epochs.best}) {self._model.id}"
+            f" | CER: {cur.cer:.4f}/({best.cer:.4f})"
+            f" | Loss: {tcur.loss:.4f}/({tbest.loss:.4f})"
+            f" | Lr: {lr:.4f}e-5"
+            f" | Epoch: {self._epochs.current}/{self._epochs.total}"
+        )
 
     def train(self, train_loader):
         self._model.train()
         self._model.to(self._device)
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
-        loader = train_loader
-        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
 
-        for iter, data in tqdm(
-            enumerate(loader, start=0), total=len(loader), desc=self.description()
-        ):
+        use_amp = self.mixed_precision and self._device != "cpu"
+        scaler = torch.amp.GradScaler("cuda") if use_amp else None
 
-            if self.mixed_precision:
-                with torch.cuda.amp.autocast():
+        for data in tqdm(train_loader, total=len(train_loader), desc=self.description()):
+            if use_amp:
+                with torch.amp.autocast("cuda"):
                     valid_loss, loss, loss_value = self.fit(data)
             else:
                 valid_loss, loss, loss_value = self.fit(data)
 
             if valid_loss:
                 self._optimizer.zero_grad()
-                if self.mixed_precision:
+                if use_amp:
                     scaler.scale(loss).backward()
                     scaler.step(self._optimizer)
                     scaler.update()
@@ -86,39 +90,32 @@ class DeepSpeechTrainer(SakuraTrainer):
                     self._optimizer.step()
                 current.loss += loss_value
             else:
-                print("Loss non valid, skipped")
-                pass
+                print("Loss non-valid, skipped")
 
-        self.update(current, best, loader, update_best=False)
-        self._scheduler.step() if self._scheduler is not None else None
+        self.update(current, best, train_loader, update_best=False)
+        if self._scheduler is not None:
+            self._scheduler.step()
 
     def fit(self, data):
         inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
-        # measure data loading time
         inputs = inputs.to(self._device)
         out, output_sizes = self._model.forward(inputs, input_sizes)
-        out = out.transpose(0, 1)  # TxNxH
-        float_out = out.float()  # ensure float32 for loss
-        float_out = float_out.log_softmax(2)
-        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(
-            self._device
-        )
-        loss = loss / inputs.size(0)  # average the loss by minibatch
-
-        # Check the loss
+        out = out.transpose(0, 1)
+        float_out = out.float().log_softmax(2)
+        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(self._device)
+        loss = loss / inputs.size(0)
         loss_value = loss.item()
         valid_loss, error = check_loss(loss, loss_value)
         return valid_loss, loss, loss_value
 
     def test(self, test_loader):
         current, best = self._metrics.test.current, self._metrics.test.best
-        loader = test_loader
         wer, cer, _ = self._model(
-            loader=loader, device=self._device_test, output_file=self.output_file
+            loader=test_loader, device=self._device_test, output_file=self.output_file
         )
         current.wer, current.cer = wer, cer
-        self.update(current, best, loader, update_best=True)
+        self.update(current, best, test_loader, update_best=True)
         self.checkpoint()
 
     def update(self, current, best, loader, update_best=False):
@@ -134,7 +131,6 @@ class DeepSpeechTrainer(SakuraTrainer):
     @staticmethod
     def optimizer_to(optim, device):
         for param in optim.state.values():
-            # Not sure there are any global tensors in the state dict
             if isinstance(param, torch.Tensor):
                 param.data = param.data.to(device)
                 if param._grad is not None:
@@ -147,28 +143,20 @@ class DeepSpeechTrainer(SakuraTrainer):
                             subparam._grad.data = subparam._grad.data.to(device)
 
     def load(self, all=True):
-        model_path = self._model_path
-        if os.path.exists(model_path):
-            ckpt = torch.load(model_path, map_location="cpu")
+        if os.path.exists(self._model_path):
+            ckpt = torch.load(self._model_path, map_location="cpu", weights_only=False)
             self._model.load_state_dict(ckpt["state_dict"])
             if all:
                 self._optimizer.load_state_dict(ckpt["optimizer"])
                 if self.overwrite_lr is not None:
                     self._optimizer.param_groups[0]["lr"] = self.overwrite_lr
-                self._scheduler = (
-                    ckpt["scheduler"]
-                    if ckpt["scheduler"] is not None
-                    else self._scheduler
-                )
+                self._scheduler = ckpt.get("scheduler", self._scheduler)
                 if self._scheduler is not None:
                     self._scheduler.optimizer = self._optimizer
             self._metrics = ckpt["metrics"]
-            self._epochs.start, self._epochs.current, self._epochs.best = (
-                ckpt["epoch"],
-                ckpt["epoch"],
-                ckpt["epoch"],
-            )
-            print(f"restart from {model_path}")
+            epoch = ckpt["epoch"]
+            self._epochs.start = self._epochs.current = self._epochs.best = epoch
+            print(f"restart from {self._model_path}")
 
     def save(self):
         os.makedirs(parent(self._model_path), exist_ok=True)
@@ -182,4 +170,4 @@ class DeepSpeechTrainer(SakuraTrainer):
             },
             self._model_path,
         )
-        print(f"{self._model_path} saved...")
+        print(f"{self._model_path} saved")

@@ -1,47 +1,59 @@
-import os 
+import os
+import subprocess
+
+import soundfile as sf
 from gnutools.concurrent import ProcessPoolExecutorBar
 from gnutools.fs import listfiles, parent
-import wave
+
 from asr_deepspeech.audio import duration
 
 
 class WAVConverter:
-    def __init__(self, src, dst, fq, overwrite=False):
+    """Convert audio files (WAV/FLAC/MP3/…) to 16 kHz mono WAV using ffmpeg."""
+
+    EXTENSIONS = (".wav", ".flac", ".mp3", ".ogg", ".opus", ".m4a")
+
+    def __init__(self, src: str, dst: str, fq: int = 16000, overwrite: bool = False):
         self._src = os.path.realpath(src)
         self._dst = os.path.realpath(dst)
         self._fq = fq
         self._overwrite = overwrite
-        
-    @staticmethod
-    def fq(file):
-        with wave.open(file, "rb") as wave_file:
-            return wave_file.getframerate()
-    @staticmethod
-    def main(wav_file, landing, bronze, overwrite):
-        wav_output = wav_file.replace(landing, bronze)
-        try:
-            assert os.path.exists(wav_output) & (not overwrite)
-            assert WAVConverter.fq(wav_output)==16000
-        except:
-            os.makedirs(parent(wav_output), exist_ok=True)
-            os.system(f"nohup ffmpeg -i {wav_file} -ar 16000 {wav_output} -y >/dev/null 2>&1")
-        finally:
-            assert WAVConverter.fq(wav_output)==16000
 
-        return (wav_output, duration(wav_output))
-        
+    @staticmethod
+    def _sample_rate(path: str) -> int:
+        return sf.info(path).samplerate
+
+    @staticmethod
+    def main(audio_file: str, src: str, dst: str, fq: int, overwrite: bool):
+        # Map source extension → .wav in destination
+        rel = os.path.relpath(audio_file, src)
+        wav_output = os.path.join(dst, os.path.splitext(rel)[0] + ".wav")
+        already_ok = (
+            os.path.exists(wav_output)
+            and not overwrite
+            and WAVConverter._sample_rate(wav_output) == fq
+        )
+        if not already_ok:
+            os.makedirs(parent(wav_output), exist_ok=True)
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", audio_file, "-ar", str(fq), "-ac", "1", wav_output],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"ffmpeg failed for {audio_file}")
+        if WAVConverter._sample_rate(wav_output) != fq:
+            raise RuntimeError(f"Unexpected sample rate in {wav_output}")
+        return wav_output, duration(wav_output)
+
     def run(self):
-        wav_files = [f for f in listfiles(self._src) if f.endswith(".wav")]
+        audio_files = [
+            f for f in listfiles(self._src)
+            if os.path.splitext(f)[1].lower() in self.EXTENSIONS
+        ]
         bar = ProcessPoolExecutorBar()
-        bar.submit([(WAVConverter.main, 
-                     wav_file, 
-                     self._src,
-                     self._dst,
-                     self._overwrite) for wav_file in wav_files])
+        bar.submit([
+            (WAVConverter.main, f, self._src, self._dst, self._fq, self._overwrite)
+            for f in audio_files
+        ])
         return bar._results
-    
-if __name__ == "__main__":
-    landing = "/dbfs/FileStore/asr/landing/jsut_ver1.1"
-    bronze = "/dbfs/FileStore/asr/bronze/jsut_ver1.1"
-    WAVConverter(landing, bronze, 16000).run()
-    
