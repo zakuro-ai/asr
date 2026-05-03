@@ -7,6 +7,7 @@ SKIP_MODULES = {
     "asr_deepspeech.models",
     "asr_deepspeech.models.deepspeech_model",
     "asr_deepspeech.multiproc",
+    "asr_deepspeech.trainers.__main__",
 }
 
 
