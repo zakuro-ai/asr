@@ -1,4 +1,10 @@
-.deps
-*/etc/*
+.git
+.github
+.venv
 __pycache__
-.idea
+*.egg-info
+build/
+notebooks/
+*.pt
+*.pth
+.env

@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: auto-release
@@ -70,6 +71,8 @@ jobs:
     needs: bump-and-release
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,22 +82,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v4
-
       - name: Build wheel + sdist
         run: |
-          uv venv .venv
-          uv pip install --python .venv/bin/python hatchling build twine
-          .venv/bin/python -m build --outdir dist
+          pip install build
+          python -m build --outdir dist
 
-      - name: Publish to PyPI (API token)
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TWINE_PASSWORD:-}" ]; then
-            echo "::error::PYPI_API_TOKEN secret is not set on the 'release' environment."
-            exit 1
-          fi
-          .venv/bin/python -m twine upload dist/* --non-interactive
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
