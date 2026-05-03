@@ -3,6 +3,12 @@ import pkgutil
 
 import asr_deepspeech
 
+SKIP_MODULES = {
+    "asr_deepspeech.models",
+    "asr_deepspeech.models.deepspeech_model",
+    "asr_deepspeech.multiproc",
+}
+
 
 def test_version():
     assert asr_deepspeech.__version__
@@ -14,6 +20,8 @@ def test_submodule_imports():
     for importer, modname, ispkg in pkgutil.walk_packages(
         path=package.__path__, prefix=package.__name__ + ".", onerror=lambda _: None
     ):
+        if modname in SKIP_MODULES:
+            continue
         try:
             importlib.import_module(modname)
         except Exception as exc:

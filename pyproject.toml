@@ -33,6 +33,8 @@ dependencies = [
     "soundfile",
     "scikit-learn",
     "protobuf>=3.20.2",
+    "ascii_graph",
+    "tensorboard",
 ]
 
 [project.optional-dependencies]
