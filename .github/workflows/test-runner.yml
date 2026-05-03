@@ -1,0 +1,24 @@
+name: Test Self-Hosted Runner
+on:
+  workflow_dispatch:
+
+jobs:
+  test-runner:
+    runs-on: [self-hosted, gpu]
+    steps:
+      - name: System info
+        run: |
+          echo "=== Host ==="
+          hostname && uname -a
+          echo ""
+          echo "=== GPU ==="
+          nvidia-smi
+          echo ""
+          echo "=== Docker ==="
+          docker --version
+          docker buildx ls
+          echo ""
+          echo "=== Resources ==="
+          nproc && free -h | head -2
+          echo ""
+          echo "Runner OK"
