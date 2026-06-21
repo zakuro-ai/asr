@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "scipy>=1.10",
-    "gnutools-python>=2.3.2",
+    "gnutools-python>=2.3.5",
     "python-levenshtein",
     "torch",
     "librosa",
