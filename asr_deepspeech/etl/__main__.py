@@ -1,11 +1,11 @@
 import argparse
 import os
 
+from gnutools import fs
 from sklearn.model_selection import train_test_split
 
 from asr_deepspeech import cfg
 from asr_deepspeech.etl import JSUTDataset, LibriSpeechDataset
-from gnutools import fs
 
 DATASETS = {
     "jsut": JSUTDataset,

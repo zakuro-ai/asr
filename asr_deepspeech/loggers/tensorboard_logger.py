@@ -1,5 +1,7 @@
 import os
+
 from torch.utils.tensorboard import SummaryWriter
+
 from asr_deepspeech import to_np
 
 

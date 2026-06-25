@@ -54,3 +54,14 @@ packages = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "asr_deepspeech/config.yml" = "asr_deepspeech/config.yml"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F403"]
+"asr_deepspeech/parsers/default_parser.py" = ["E501"]

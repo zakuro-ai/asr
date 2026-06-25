@@ -17,7 +17,9 @@
 #         transcript_files = listfiles(self.__root, ["transcript_utf8.txt"])
 #         dtext = {}
 #         for transcript_file in transcript_files:
-#             records = dict([l.rsplit()[0].split(":") for l in open(transcript_file, "r").readlines()])
+#             records = dict(
+#                 [l.rsplit()[0].split(":") for l in open(transcript_file, "r").readlines()]
+#             )
 #             dtext.update(records)
 #         assert len(daudio)==len(dtext)
 #         for id, text in tqdm(dtext.items(), total=len(dtext), desc="Building the manifest"):
@@ -32,7 +34,8 @@
 
 #     def export(self, manifest, labels=None):
 #         json.dump(self, open(manifest, "w"), indent=4, ensure_ascii=False)
-#         json.dump(list(self.__labels), open(labels, "w"), indent=4, ensure_ascii=False) if labels is not None else None
+#         if labels is not None:
+#             json.dump(list(self.__labels), open(labels, "w"), indent=4, ensure_ascii=False)
 
 # if __name__=="__main__":
 #     manifest = JSUTManifest(root="/mnt/.cdata/ASR/ja/raw/CLEAN/JSUT/jsut_ver1.1")

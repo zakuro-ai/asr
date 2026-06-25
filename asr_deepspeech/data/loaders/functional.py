@@ -16,7 +16,7 @@ def get_loader(audio_conf, labels, manifest, batch_size, num_workers, caching=Fa
     loader = AudioDataLoader(
         dataset,
         num_workers=num_workers,
-        batch_sampler=sampler
+        batch_sampler=sampler,
         # pin_memory=True
     )
 

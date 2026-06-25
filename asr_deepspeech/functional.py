@@ -1,7 +1,5 @@
-import torch.distributed as dist
 import torch
-import yaml
-from argparse import Namespace
+import torch.distributed as dist
 
 
 def to_np(x):

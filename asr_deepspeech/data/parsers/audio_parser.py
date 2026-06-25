@@ -1,4 +1,3 @@
-
 class AudioParser(object):
     def parse_transcript(self, transcript_path):
         """
@@ -13,5 +12,3 @@ class AudioParser(object):
         :return: Audio in training/testing format
         """
         raise NotImplementedError
-
-
