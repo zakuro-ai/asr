@@ -20,7 +20,7 @@ dependencies = [
     "scipy>=1.10",
     "gnutools-python>=2.3.2",
     "python-levenshtein",
-    "torch",
+    "torch>=2.0",
     "librosa",
     "tqdm",
     "matplotlib",
