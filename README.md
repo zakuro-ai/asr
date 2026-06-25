@@ -45,50 +45,26 @@ At a granular level, ASRDeepSpeech is a library that consists of the following c
 
 
 # Code structure
-```python
-from setuptools import setup
-from asr_deepspeech import __version__
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-setup(
-    name="asr_deepspeech",
-    version=__version__,
-    short_description="ASRDeepspeech (English / Japanese)",
-    long_description="".join(open("README.md", "r").readlines()),
-    long_description_content_type="text/markdown",
-    url="https://github.com/zakuro-ai/asr",
-    license="MIT Licence",
-    author="CADIC Jean-Maximilien",
-    python_requires=">=3.8",
-    packages=[
-        "asr_deepspeech",
-        "asr_deepspeech.audio",
-        "asr_deepspeech.data",
-        "asr_deepspeech.data.dataset",
-        "asr_deepspeech.data.loaders",
-        "asr_deepspeech.data.manifests",
-        "asr_deepspeech.data.parsers",
-        "asr_deepspeech.data.samplers",
-        "asr_deepspeech.decoders",
-        "asr_deepspeech.etl",
-        "asr_deepspeech.loggers",
-        "asr_deepspeech.models",
-        "asr_deepspeech.modules",
-        "asr_deepspeech.parsers",
-        "asr_deepspeech.tests",
-        "asr_deepspeech.trainers",
-    ],
-    include_package_data=True,
-    package_data={"": ["*.yml"]},
-    install_requires=[r.rsplit()[0] for r in open("requirements.txt")],
-    author_email="git@zakuro.ai",
-    description="ASRDeepspeech (English / Japanese)",
-    platforms="linux_debian_10_x86_64",
-    classifiers=[
-        "Programming Language :: Python :: 3.8",
-        "License :: OSI Approved :: MIT License",
-    ],
-)
+[project]
+name = "asr-deepspeech"
+dynamic = ["version"]
+description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro.ai" }]
+requires-python = ">=3.9"
+keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
 
+[tool.hatch.version]
+path = "asr_deepspeech/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["asr_deepspeech"]
 ```
 
 
@@ -101,30 +77,37 @@ To clone and run this application, you'll need the following installed on your c
    - [Install Docker Desktop on Linux](https://docs.docker.com/desktop/install/linux-install/)
 - [Python](https://www.python.org/downloads/)
 
-Install bpd:
 ```bash
-# Clone this repository and install the code
+# Clone this repository
 git clone https://github.com/zakuro-ai/asr
 
 # Go into the repository
 cd asr
 ```
 
+Install the package:
+```bash
+pip install asr-deepspeech
+# or with uv:
+uv pip install asr-deepspeech
+```
+
 
 # Makefile commands
 Exhaustive list of make commands:
 ```
-pull                # Download the docker image
-sandbox             # Launch the sandox image 
-install_wheels      # Install the wheel
-tests               # Test the code
+build               # Build the wheel package
+test                # Run the test suite
+docker-vanilla      # Build the vanilla Docker image
+docker-sandbox      # Build the sandbox Docker image
+docker              # Build all Docker images
+clean               # Remove build artifacts
 ```
 # Environments
 We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
  the code. 
-If you decide to run the code locally you will need python3.6 with cuda>=10.1.
-Several libraries are needed to be installed for training to work. I will assume that everything is being installed in
-an Anaconda installation on Ubuntu, with Pytorch 1.0.
+If you decide to run the code locally you will need Python >=3.9.
+Several libraries are needed to be installed for training to work.
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
 ## Docker
@@ -135,8 +118,7 @@ Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven'
 
 To build and run the docker image
 ```
-make pull
-make sandbox
+make docker-sandbox
 ```
 
 ## PythonEnv
@@ -145,12 +127,12 @@ make sandbox
 > 
 > Running this application by using PythonEnv is possible but *not* recommended.
 ```
-make install_wheels
+pip install asr-deepspeech
 ```
 
 ## Test
 ```
-make tests
+make test
 ```
 You should be able to get an output like
 ```python
@@ -173,7 +155,7 @@ You should be able to get an output like
 By default we process the JSUT dataset. See the `config` section to know how to process a custom dataset.
 ```python
 from gnutools.remote import gdrive
-from asr_deepspech import  cfg
+from asr_deepspeech import cfg
 
 # This will download the JSUT dataset in your /tmp
 gdrive(cfg.gdrive_uri)
