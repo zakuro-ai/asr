@@ -13,7 +13,6 @@ on:
 permissions:
   contents: write
   id-token: write
-  administration: write
 
 concurrency:
   group: auto-release
@@ -27,10 +26,15 @@ jobs:
       new_version: ${{ steps.bump.outputs.new_version }}
       tag: ${{ steps.bump.outputs.tag }}
     steps:
+      # RELEASE_TOKEN must be a fine-grained PAT from a repo admin (enforce_admins: false
+      # means admin tokens bypass the PR-review branch protection on master).
+      # Create at: github.com → Settings → Developer settings → Fine-grained tokens
+      # Permissions needed: Contents (read & write) on this repo.
+      # Store as: Settings → Secrets → Actions → RELEASE_TOKEN
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Configure git
         run: |
@@ -51,13 +55,6 @@ jobs:
           echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
 
-      - name: Temporarily lift PR requirement
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api repos/${{ github.repository }}/branches/${{ github.ref_name }}/protection/required_pull_request_reviews \
-            --method DELETE
-
       - name: Commit + tag
         run: |
           set -euo pipefail
@@ -66,22 +63,6 @@ jobs:
           git tag "${{ steps.bump.outputs.tag }}"
           git push origin HEAD:${{ github.ref_name }}
           git push origin "${{ steps.bump.outputs.tag }}"
-
-      - name: Restore PR requirement
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api repos/${{ github.repository }}/branches/${{ github.ref_name }}/protection/required_pull_request_reviews \
-            --method PUT \
-            --input - <<'BODY'
-          {
-            "dismiss_stale_reviews": true,
-            "require_code_owner_reviews": true,
-            "require_last_push_approval": false,
-            "required_approving_review_count": 1
-          }
-          BODY
 
       - name: Create GitHub release
         env:
