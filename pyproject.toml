@@ -24,7 +24,7 @@ dependencies = [
     "librosa",
     "tqdm",
     "matplotlib",
-    "numpy>=1.23.3",
+    "numpy>=2.0.2",
     "PyYaml",
     "zakuro-ai",
     "sakura-ml>=0.1.1",
