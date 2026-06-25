@@ -77,6 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     permissions:
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
@@ -91,6 +92,14 @@ jobs:
         run: |
           pip install build
           python -m build --outdir dist
+
+      - name: Generate SBOM
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py environment -o sbom.json
+          gh release upload "${{ needs.bump-and-release.outputs.tag }}" sbom.json --clobber
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
