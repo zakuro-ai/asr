@@ -1,0 +1,10 @@
+ASR-DeepSpeech
+Copyright (c) 2022 CADIC Jean Maximilien
+
+This project is a fork of SeanNaren/deepspeech.pytorch
+(https://github.com/SeanNaren/deepspeech.pytorch), which is itself
+licensed under the MIT License.
+
+Thanks to Egor Lakomkin (https://github.com/EgorLakomkin) and
+Ryan Leary (https://github.com/ryanleary) for their contributions
+to the upstream project.
