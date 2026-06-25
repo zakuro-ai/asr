@@ -55,4 +55,4 @@ jobs:
         run: uv run python -c "import asr_deepspeech; print(f'asr_deepspeech {asr_deepspeech.__version__}')"
 
       - name: Run tests
-        run: uv run python -m pytest tests/ -v --tb=short
+        run: uv run python -m pytest tests/ -v --tb=short --cov=asr_deepspeech --cov-report=term-missing --cov-fail-under=50
