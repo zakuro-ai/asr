@@ -1,16 +1,37 @@
 import torch
+
 from .decoder import Decoder
 
+
 class BeamCTCDecoder(Decoder):
-    def __init__(self, labels, lm_path=None, alpha=0, beta=0, cutoff_top_n=40, cutoff_prob=1.0, beam_width=100,
-                 num_processes=4, blank_index=0):
+    def __init__(
+        self,
+        labels,
+        lm_path=None,
+        alpha=0,
+        beta=0,
+        cutoff_top_n=40,
+        cutoff_prob=1.0,
+        beam_width=100,
+        num_processes=4,
+        blank_index=0,
+    ):
         super(BeamCTCDecoder, self).__init__(labels)
         try:
             from ctcdecode import CTCBeamDecoder
         except ImportError:
             raise ImportError("BeamCTCDecoder requires paddledecoder package.")
-        self.decoder = CTCBeamDecoder(labels, lm_path, alpha, beta, cutoff_top_n, cutoff_prob, beam_width,
-                                       num_processes, blank_index)
+        self.decoder = CTCBeamDecoder(
+            labels,
+            lm_path,
+            alpha,
+            beta,
+            cutoff_top_n,
+            cutoff_prob,
+            beam_width,
+            num_processes,
+            blank_index,
+        )
 
     def convert_to_strings(self, out, seq_len):
         results = []
@@ -19,9 +40,9 @@ class BeamCTCDecoder(Decoder):
             for p, utt in enumerate(batch):
                 size = seq_len[b][p]
                 if size > 0:
-                    transcript = ''.join(map(lambda x: self.int_to_char[x.item()], utt[0:size]))
+                    transcript = "".join(map(lambda x: self.int_to_char[x.item()], utt[0:size]))
                 else:
-                    transcript = ''
+                    transcript = ""
                 utterances.append(transcript)
             results.append(utterances)
         return results
@@ -55,4 +76,3 @@ class BeamCTCDecoder(Decoder):
         strings = self.convert_to_strings(out, seq_lens)
         offsets = self.convert_tensor(offsets, seq_lens)
         return strings, offsets
-

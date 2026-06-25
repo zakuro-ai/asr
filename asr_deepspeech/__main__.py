@@ -1,5 +1,5 @@
-from asr_deepspeech.modules import DeepSpeech
 from asr_deepspeech import cfg
+from asr_deepspeech.modules import DeepSpeech
 
 if __name__ == "__main__":
     model = DeepSpeech(**vars(cfg.model))

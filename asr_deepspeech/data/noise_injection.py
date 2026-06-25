@@ -1,16 +1,16 @@
 import os
+
 import librosa
 import numpy as np
-from asr_deepspeech.audio import get_audio_length, audio_with_sox
+
+from asr_deepspeech.audio import audio_with_sox, get_audio_length
 
 
 class NoiseInjection(object):
-    def __init__(self,
-                 path=None,
-                 sample_rate=16000,
-                 noise_levels=(0, 0.5)):
+    def __init__(self, path=None, sample_rate=16000, noise_levels=(0, 0.5)):
         """
-        Adds noise to an input signal with specific SNR. Higher the noise level, the more noise added.
+        Adds noise to an input signal with specific SNR. Higher the noise level,
+        the more noise added.
         Modified code from https://github.com/willfrey/audio/blob/master/torchaudio/transforms.py
         """
         if not os.path.exists(path):

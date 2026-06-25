@@ -1,14 +1,17 @@
 import torch
+
 from .deepspeech import DeepSpeech
 
-
-if __name__ == '__main__':
-    import os.path
+if __name__ == "__main__":
     import argparse
+    import os.path
 
-    parser = argparse.ArgumentParser(description='DeepSpeech model information')
-    parser.add_argument('--model-path', default='models/deepspeech_final.pth',
-                        help='Path to model file created by training')
+    parser = argparse.ArgumentParser(description="DeepSpeech model information")
+    parser.add_argument(
+        "--model-path",
+        default="models/deepspeech_final.pth",
+        help="Path to model file created by training",
+    )
     args = parser.parse_args()
     package = torch.load(args.model_path, map_location=lambda storage, loc: storage)
     model = DeepSpeech.load_model(args.model_path)
@@ -29,11 +32,11 @@ if __name__ == '__main__':
     print("  Window Size:      ", model.audio_conf.get("window_size", "n/a"))
     print("  Window Stride:    ", model.audio_conf.get("window_stride", "n/a"))
 
-    if package.get('loss_results', None) is not None:
+    if package.get("loss_results", None) is not None:
         print("")
         print("Training Information")
-        epochs = package['epoch']
+        epochs = package["epoch"]
         print("  Epochs:           ", epochs)
-        print("  Current Loss:      {0:.3f}".format(package['loss_results'][epochs - 1]))
-        print("  Current CER:       {0:.3f}".format(package['cer_results'][epochs - 1]))
-        print("  Current WER:       {0:.3f}".format(package['wer_results'][epochs - 1]))
+        print("  Current Loss:      {0:.3f}".format(package["loss_results"][epochs - 1]))
+        print("  Current CER:       {0:.3f}".format(package["cer_results"][epochs - 1]))
+        print("  Current WER:       {0:.3f}".format(package["wer_results"][epochs - 1]))

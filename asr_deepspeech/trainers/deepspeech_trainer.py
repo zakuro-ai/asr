@@ -1,9 +1,11 @@
-from tqdm import tqdm
-import torch.utils.data.distributed
-from asr_deepspeech import check_loss
 import os
-from sakura.ml import SakuraTrainer
+
+import torch.utils.data.distributed
 from gnutools.fs import parent
+from sakura.ml import SakuraTrainer
+from tqdm import tqdm
+
+from asr_deepspeech import check_loss
 
 
 class DeepSpeechTrainer(SakuraTrainer):
@@ -55,7 +57,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         tcurrent, tbest = self._metrics.train.current, self._metrics.train.best
         suffix = f" | CER: {current.cer:.4f} / ({best.cer:.4f})"
         suffix += f" | Loss:{tcurrent.loss:.4f} / ({tbest.loss:.4f})"
-        return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | Epoch: {self._epochs.current}/{self._epochs.total}"
+        epoch_info = f"Epoch: {self._epochs.current}/{self._epochs.total}"
+        return f"({self._epochs.best}) {self._model.id}{suffix} | Lr: {lr:.4f}e-5 | {epoch_info}"
 
     def train(self, train_loader):
         self._model.train()
@@ -68,7 +71,6 @@ class DeepSpeechTrainer(SakuraTrainer):
         for iter, data in tqdm(
             enumerate(loader, start=0), total=len(loader), desc=self.description()
         ):
-
             if self.mixed_precision:
                 with torch.cuda.amp.autocast():
                     valid_loss, loss, loss_value = self.fit(data)
@@ -101,9 +103,7 @@ class DeepSpeechTrainer(SakuraTrainer):
         out = out.transpose(0, 1)  # TxNxH
         float_out = out.float()  # ensure float32 for loss
         float_out = float_out.log_softmax(2)
-        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(
-            self._device
-        )
+        loss = self.criterion(float_out, targets, output_sizes, target_sizes).to(self._device)
         loss = loss / inputs.size(0)  # average the loss by minibatch
 
         # Check the loss
@@ -156,9 +156,7 @@ class DeepSpeechTrainer(SakuraTrainer):
                 if self.overwrite_lr is not None:
                     self._optimizer.param_groups[0]["lr"] = self.overwrite_lr
                 self._scheduler = (
-                    ckpt["scheduler"]
-                    if ckpt["scheduler"] is not None
-                    else self._scheduler
+                    ckpt["scheduler"] if ckpt["scheduler"] is not None else self._scheduler
                 )
                 if self._scheduler is not None:
                     self._scheduler.optimizer = self._optimizer

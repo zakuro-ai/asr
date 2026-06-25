@@ -1,14 +1,15 @@
-import os
 import json
+import os
+
 import torch
+import torch.distributed as dist
 from apex import amp
 from apex.parallel import DistributedDataParallel
-import torch.distributed as dist
 
-from asr_deepspeech.modules.deepspeech import DeepSpeech
-from asr_deepspeech.loggers import VisdomLogger, TensorBoardLogger
-from asr_deepspeech.decoders import GreedyDecoder
 from asr_deepspeech import supported_rnns
+from asr_deepspeech.decoders import GreedyDecoder
+from asr_deepspeech.loggers import TensorBoardLogger, VisdomLogger
+from asr_deepspeech.modules.deepspeech import DeepSpeech
 
 
 class DeepSpeechModel:
@@ -16,9 +17,7 @@ class DeepSpeechModel:
         if args.gpu_rank:
             torch.cuda.set_device(int(args.gpu_rank))
         # Instantiate the default variables
-        [self._loss_results, self._cer_results, self._wer_results] = [
-            torch.Tensor(args.epochs)
-        ] * 3
+        [self._loss_results, self._cer_results, self._wer_results] = [torch.Tensor(args.epochs)] * 3
         [self._avg_loss, self._start_epoch, self._start_iter] = [0] * 3
         [
             self._optim_state,
@@ -47,9 +46,7 @@ class DeepSpeechModel:
 
         # Boards
         self._visdom_logger = (
-            VisdomLogger(args.id, args.epochs)
-            if self._main_proc and self._visdom
-            else None
+            VisdomLogger(args.id, args.epochs) if self._main_proc and self._visdom else None
         )
         self._tensorboard_logger = (
             TensorBoardLogger(args.id, args.log_dir, args.log_params)
@@ -66,9 +63,7 @@ class DeepSpeechModel:
         if main_proc and self._visdom:  # Add previous scores to visdom graph
             self._visdom_logger.load_previous_values(self._start_epoch, self._package)
         if main_proc and self._tensorboard:  # Previous scores to tensorboard logs
-            self._tensorboard_logger.load_previous_values(
-                self._start_epoch, self._package
-            )
+            self._tensorboard_logger.load_previous_values(self._start_epoch, self._package)
         self.net = DistributedDataParallel(self.net)
 
         self.net.decoder = GreedyDecoder(labels)
@@ -112,23 +107,17 @@ class DeepSpeechModel:
 
     def continue_from(self, args):
         print("Loading checkpoint model %s" % args.continue_from)
-        package = torch.load(
-            args.continue_from, map_location=lambda storage, loc: storage
-        )
+        package = torch.load(args.continue_from, map_location=lambda storage, loc: storage)
         self.net = DeepSpeech.load_model_package(package)
         self.init_optimizer(args)
         self._optim_state = package["optim_dict"]
         self._amp_state = package["amp"]
         self._optimizer.load_state_dict(self._optim_state)
         amp.load_state_dict(self._amp_state)
-        self._start_epoch = (
-            int(package.get("epoch", 1)) - 1
-        )  # Index start at 0 for training
+        self._start_epoch = int(package.get("epoch", 1)) - 1  # Index start at 0 for training
         self._start_iter = package.get("iteration", None)
         if self._start_iter is None:
-            self._start_epoch += (
-                1  # We saved model after epoch finished, start at the next epoch.
-            )
+            self._start_epoch += 1  # We saved model after epoch finished, start at the next epoch.
             self._start_iter = 0
         else:
             self._start_iter += 1
@@ -138,9 +127,7 @@ class DeepSpeechModel:
             package["cer_results"],
             package["wer_results"],
         )
-        for k, (loss, cer, wer) in enumerate(
-            zip(loss_results, cer_results, wer_results)
-        ):
+        for k, (loss, cer, wer) in enumerate(zip(loss_results, cer_results, wer_results)):
             try:
                 self._loss_results[k], self._cer_results[k], self._wer_results[k] = (
                     loss,

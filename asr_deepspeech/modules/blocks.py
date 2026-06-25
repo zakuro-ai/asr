@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.functional import F
+
+
 class SequenceWise(nn.Module):
     def __init__(self, module):
         """
@@ -19,17 +21,18 @@ class SequenceWise(nn.Module):
         return x
 
     def __repr__(self):
-        tmpstr = self.__class__.__name__ + ' (\n'
+        tmpstr = self.__class__.__name__ + " (\n"
         tmpstr += self.module.__repr__()
-        tmpstr += ')'
+        tmpstr += ")"
         return tmpstr
 
 
 class MaskConv(nn.Module):
     def __init__(self, seq_module):
         """
-        Adds padding to the output of the module based on the given lengths. This is to ensure that the
-        results of the model do not change when batch sizes change during inference.
+        Adds padding to the output of the module based on the given lengths. This is to
+        ensure that the results of the model do not change when batch sizes change during
+        inference.
         Input needs to be in the shape of (BxCxDxT)
         :param seq_module: The sequential module containing the conv stack.
         """
@@ -64,16 +67,17 @@ class InferenceBatchSoftmax(nn.Module):
 
 
 class BatchRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, rnn_type=nn.LSTM, bidirectional=False, batch_norm=True):
+    def __init__(
+        self, input_size, hidden_size, rnn_type=nn.LSTM, bidirectional=False, batch_norm=True
+    ):
         super(BatchRNN, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self._bidirectional = bidirectional
         self.batch_norm = SequenceWise(nn.BatchNorm1d(input_size)) if batch_norm else None
-        self.rnn = rnn_type(input_size=input_size,
-                            hidden_size=hidden_size,
-                            bidirectional=bidirectional,
-                            bias=True)
+        self.rnn = rnn_type(
+            input_size=input_size, hidden_size=hidden_size, bidirectional=bidirectional, bias=True
+        )
         self.num_directions = 2 if bidirectional else 1
 
     def flatten_parameters(self):
@@ -86,7 +90,8 @@ class BatchRNN(nn.Module):
         x, h = self.rnn(x)
         x, _ = nn.utils.rnn.pad_packed_sequence(x)
         if self._bidirectional:
-            x = x.view(x.size(0), x.size(1), 2, -1).sum(2).view(x.size(0), x.size(1), -1)  # (TxNxH*2) -> (TxNxH) by sum
+            # (TxNxH*2) -> (TxNxH) by sum
+            x = x.view(x.size(0), x.size(1), 2, -1).sum(2).view(x.size(0), x.size(1), -1)
         return x
 
 
@@ -100,8 +105,15 @@ class Lookahead(nn.Module):
         self.context = context
         self.n_features = n_features
         self.pad = (0, self.context - 1)
-        self.conv = nn.Conv1d(self.n_features, self.n_features, kernel_size=self.context, stride=1,
-                              groups=self.n_features, padding=0, bias=None)
+        self.conv = nn.Conv1d(
+            self.n_features,
+            self.n_features,
+            kernel_size=self.context,
+            stride=1,
+            groups=self.n_features,
+            padding=0,
+            bias=None,
+        )
 
     def forward(self, x):
         x = x.transpose(0, 1).transpose(1, 2)
@@ -111,6 +123,12 @@ class Lookahead(nn.Module):
         return x
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' \
-               + 'n_features=' + str(self.n_features) \
-               + ', context=' + str(self.context) + ')'
+        return (
+            self.__class__.__name__
+            + "("
+            + "n_features="
+            + str(self.n_features)
+            + ", context="
+            + str(self.context)
+            + ")"
+        )
