@@ -49,7 +49,7 @@ def test_parse_audio_time_frames_positive(wav_16k, audio_conf):
 def test_parse_audio_normalize_zero_mean(wav_16k, audio_conf):
     parser = SpectrogramParser(audio_conf, normalize=True)
     spect = parser.parse_audio(str(wav_16k))
-    assert abs(spect.mean().item()) < 0.1
+    assert abs(spect.mean().item()) < 1e-3
 
 
 def test_parse_audio_all_values_finite(wav_16k, audio_conf):
@@ -350,7 +350,7 @@ def label_csv(tmp_path):
     return path
 
 
-# Number of labels the CSV produces (26 letters; space is dropped by pandas NA handling)
+# Number of labels the CSV produces: 26 letters (a–z only; no space in the fixture)
 _NUM_LABELS = 26
 
 
