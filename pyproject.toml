@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "pytest-cov>=4.0"]
 
 [project.urls]
 Repository = "https://github.com/zakuro-ai/asr"
