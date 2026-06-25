@@ -1,4 +1,5 @@
 import os
+
 import pandas as pd
 import soundfile as sf
 from gnutools.fs import listfiles
@@ -55,14 +56,10 @@ class LibriSpeechDataset:
         return self
 
     def filter_duration(self, start: float = 1.0, stop: float = 20.0) -> pd.DataFrame:
-        return self._df[
-            (self._df["duration"] >= start) & (self._df["duration"] <= stop)
-        ]
+        return self._df[(self._df["duration"] >= start) & (self._df["duration"] <= stop)]
 
     def export_labels(self, output_file: str) -> None:
         chars = set()
         for text in self._df["text"]:
             chars.update(set(text))
-        pd.DataFrame.from_records(sorted(chars), columns=["label"]).to_csv(
-            output_file, index=False
-        )
+        pd.DataFrame.from_records(sorted(chars), columns=["label"]).to_csv(output_file, index=False)

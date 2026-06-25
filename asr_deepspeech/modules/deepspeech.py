@@ -1,13 +1,12 @@
-import json
 import math
 from collections import OrderedDict
 
+import pandas as pd
 from ascii_graph import Pyasciigraph
 from torch import nn
 
 from asr_deepspeech.data.loaders import get_loader
 from asr_deepspeech.decoders import GreedyDecoder
-from asr_deepspeech.modules.blocks import *
 from asr_deepspeech.modules.blocks import (
     BatchRNN,
     InferenceBatchSoftmax,
@@ -15,7 +14,6 @@ from asr_deepspeech.modules.blocks import (
     MaskConv,
     SequenceWise,
 )
-import pandas as pd
 
 
 class DeepSpeech(nn.Module):
@@ -42,7 +40,7 @@ class DeepSpeech(nn.Module):
         self.rnn_hidden_size = rnn_hidden_size
         self.rnn_hidden_layers = rnn_hidden_layers
         self.rnn_type = eval(rnn_type)
-        self.labels =  dict([(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()])
+        self.labels = dict([(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()])
         self.bidirectional = bidirectional
         self.sample_rate = self.audio_conf.sample_rate
         self.window_size = self.audio_conf.window_size
@@ -114,9 +112,8 @@ class DeepSpeech(nn.Module):
             try:
                 assert state_dict[k].shape == v.shape
                 state_dict[k] = v
-            except:
+            except Exception:
                 print(k, state_dict[k].shape, v.shape)
-                pass
         self.load_state_dict(state_dict)
         print(f"finetune from {model_path} (last {nlayers} layers)")
 
@@ -131,9 +128,7 @@ class DeepSpeech(nn.Module):
         x, _ = self.conv(x, output_lengths)
 
         sizes = x.size()
-        x = x.view(
-            sizes[0], sizes[1] * sizes[2], sizes[3]
-        )  # Collapse feature dimension
+        x = x.view(sizes[0], sizes[1] * sizes[2], sizes[3])  # Collapse feature dimension
         x = x.transpose(1, 2).transpose(0, 1).contiguous()  # TxNxH
 
         for rnn in self.rnns:
@@ -245,7 +240,7 @@ class DeepSpeech(nn.Module):
             wer = float(total_wer) / num_tokens
             cer = float(total_cer) / num_chars
 
-            cers = [(f"{k*10}-{(k*10) + 10}", v - 1) for k, v in hcers.items()]
+            cers = [(f"{k * 10}-{(k * 10) + 10}", v - 1) for k, v in hcers.items()]
 
             graph = Pyasciigraph()
             asciihistogram = "\n|".join(graph.graph("CER histogram", cers))
@@ -255,7 +250,7 @@ class DeepSpeech(nn.Module):
                     f.write(
                         "\n".join(
                             [
-                                f"================= {wer*100:.2f}/{cer*100:.2f} =================",
+                                f"===== {wer * 100:.2f}/{cer * 100:.2f} =====",
                                 "----- BEST -----",
                                 min_str,
                                 "----- LAST -----",
@@ -273,19 +268,16 @@ class DeepSpeech(nn.Module):
 
     def get_seq_lens(self, input_length):
         """
-        Given a 1D Tensor or Variable containing integer sequence lengths, return a 1D tensor or variable
-        containing the size sequences that will be output by the network.
+        Given a 1D Tensor or Variable containing integer sequence lengths, return a 1D
+        tensor or variable containing the size sequences that will be output by the network.
         :param input_length: 1D Tensor
         :return: 1D Tensor scaled by model
         """
         seq_len = input_length
         for m in self.conv.modules():
-            if type(m) == nn.modules.conv.Conv2d:
+            if isinstance(m, nn.modules.conv.Conv2d):
                 seq_len = (
-                    seq_len
-                    + 2 * m.padding[1]
-                    - m.dilation[1] * (m.kernel_size[1] - 1)
-                    - 1
+                    seq_len + 2 * m.padding[1] - m.dilation[1] * (m.kernel_size[1] - 1) - 1
                 ) / m.stride[1] + 1
         return seq_len.int()
 

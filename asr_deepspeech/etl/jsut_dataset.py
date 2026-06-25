@@ -1,6 +1,7 @@
-from asr_deepspeech.audio import WAVConverter
 import pandas as pd
 from gnutools.fs import listfiles, name
+
+from asr_deepspeech.audio import WAVConverter
 
 
 class JSUTDataset:
@@ -14,7 +15,7 @@ class JSUTDataset:
         transcripts = listfiles(landing, ["transcript_utf8.txt"])
         texts = dict()
         for file in transcripts:
-            d = dict([self.clean_text(l.split(":")) for l in open(file, "r")])
+            d = dict([self.clean_text(line.split(":")) for line in open(file, "r")])
             texts.update(d)
 
         df = pd.DataFrame.from_records(
@@ -35,14 +36,10 @@ class JSUTDataset:
         return (k, v)
 
     def filter_duration(self, start=1, stop=5):
-        return self._df[
-            (self._df["duration"] >= start) & (self._df["duration"] <= stop)
-        ]
+        return self._df[(self._df["duration"] >= start) & (self._df["duration"] <= stop)]
 
     def export_labels(self, output_file):
         s = set()
         for r in self._df["text"]:
             s = s.union(set(r))
-        pd.DataFrame.from_records(list(s), columns=["label"]).to_csv(
-            output_file, index=False
-        )
+        pd.DataFrame.from_records(list(s), columns=["label"]).to_csv(output_file, index=False)

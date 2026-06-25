@@ -1,5 +1,6 @@
 import Levenshtein as Lev
 
+
 class Decoder(object):
     """
     Basic decoder class from which all other decoders inherit. Implements several
@@ -16,9 +17,10 @@ class Decoder(object):
         self.labels = labels
         self.int_to_char = dict([(i, c) for (i, c) in enumerate(labels)])
         self.blank_index = blank_index
-        space_index = len(labels)  # To prevent errors in decode, we add an out of bounds index for the space
-        if ' ' in labels:
-            space_index = labels.index(' ')
+        # To prevent errors in decode, we add an out of bounds index for the space
+        space_index = len(labels)
+        if " " in labels:
+            space_index = labels.index(" ")
         self.space_index = space_index
 
     def wer(self, s1, s2):
@@ -39,7 +41,7 @@ class Decoder(object):
         w1 = [chr(word2char[w]) for w in s1.split()]
         w2 = [chr(word2char[w]) for w in s2.split()]
 
-        return Lev.distance(''.join(w1), ''.join(w2))
+        return Lev.distance("".join(w1), "".join(w2))
 
     def cer(self, s1, s2):
         """
@@ -49,7 +51,10 @@ class Decoder(object):
             s1 (string): space-separated sentence
             s2 (string): space-separated sentence
         """
-        s1, s2, = s1.replace(' ', ''), s2.replace(' ', '')
+        (
+            s1,
+            s2,
+        ) = s1.replace(" ", ""), s2.replace(" ", "")
         return Lev.distance(s1, s2)
 
     def decode(self, probs, sizes=None):
@@ -65,5 +70,3 @@ class Decoder(object):
             string: sequence of the model's best guess for the transcription
         """
         raise NotImplementedError
-
-

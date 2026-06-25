@@ -1,8 +1,8 @@
-from torch.utils.data import Dataset
-from asr_deepspeech.data.parsers import SpectrogramParser
-import json
-from tqdm import tqdm
 import pandas as pd
+from torch.utils.data import Dataset
+from tqdm import tqdm
+
+from asr_deepspeech.data.parsers import SpectrogramParser
 
 
 class SpectrogramDataset(Dataset, SpectrogramParser):
@@ -16,13 +16,14 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         caching=False,
     ):
         """
-        Dataset that loads tensors via a csv containing file paths to audio files and transcripts separated by
-        a comma. Each new line is a different sample. Example below:
+        Dataset that loads tensors via a csv containing file paths to audio files and
+        transcripts separated by a comma. Each new line is a different sample. Example:
 
         /path/to/audio.wav,/path/to/audio.txt
         ...
 
-        :param audio_conf: Dictionary containing the sample rate, window and the window length/stride in seconds
+        :param audio_conf: Dictionary containing the sample rate, window and the
+            window length/stride in seconds
         :param manifest_filepath: Path to manifest csv as describe above
         :param labels: String containing all the possible characters to map to
         :param normalize: Apply standard mean and deviation normalization to audio tensor
@@ -31,7 +32,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         """
         self.df = pd.read_csv(manifest_filepath)
         self.size = len(self.df)
-        if type(labels) == str:
+        if isinstance(labels, str):
             labels = dict([(v, k) for k, v in pd.read_csv(labels).to_dict()["label"].items()])
         self.labels_map = labels
         self.caching = caching
@@ -42,9 +43,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
             self.specs = dict(
                 [
                     (r.audio_filepath, self.parse_audio(r.audio_filepath))
-                    for k, r in tqdm(
-                        self.df.iterrows(), total=len(self.df), desc="Loading audio"
-                    )
+                    for k, r in tqdm(self.df.iterrows(), total=len(self.df), desc="Loading audio")
                 ]
             )
             self.transcripts = dict(
@@ -64,17 +63,13 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         if self.caching:
             spec, transcript = self.specs[audio_path], self.transcripts[transcript]
         else:
-            spec, transcript = self.parse_audio(audio_path), self.parse_transcript(
-                transcript
-            )
+            spec, transcript = self.parse_audio(audio_path), self.parse_transcript(transcript)
 
         return spec, transcript
 
     def parse_transcript(self, transcript):
         transcript = transcript.replace("\n", "")
-        transcript = list(
-            filter(None, [self.labels_map.get(x) for x in list(transcript)])
-        )
+        transcript = list(filter(None, [self.labels_map.get(x) for x in list(transcript)]))
         return transcript
 
     def __len__(self):
@@ -82,7 +77,6 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
 
 
 if __name__ == "__main__":
-
     from asr_deepspeech import cfg
 
     dataset = SpectrogramDataset(

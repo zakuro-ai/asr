@@ -1,7 +1,8 @@
-from gnutools.tests import test_imports
-from gnutools.fs import parent
 import os
-import torch
+
+from gnutools.fs import parent
+from gnutools.tests import test_imports
+
 # import  warpctc_pytorch as warp_ctc
 test_imports(parent(os.path.realpath(__file__), level=2))
 # try:
