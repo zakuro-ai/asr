@@ -29,7 +29,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # RELEASE_TOKEN must be a PAT with 'contents: write' whose owner is
+          # listed under Settings → Branches → Allow specified actors to bypass
+          # required pull requests.  Without it the push is blocked by the
+          # "Changes must be made through a pull request" branch-protection rule.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Configure git
         run: |
@@ -47,13 +51,14 @@ jobs:
           echo "  new    : $NEW"
           sed -i.bak -E "s/^__version__ = \".*\"/__version__ = \"$NEW\"/" asr_deepspeech/__init__.py
           rm asr_deepspeech/__init__.py.bak
+          sed -i "s/^  version:[[:space:]]*v[0-9.]*$/  version:                  v${NEW}/" asr_deepspeech/config.yml
           echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
 
       - name: Commit + tag
         run: |
           set -euo pipefail
-          git add asr_deepspeech/__init__.py
+          git add asr_deepspeech/__init__.py asr_deepspeech/config.yml
           git commit -m "chore(release): v${{ steps.bump.outputs.new_version }} [skip release]"
           git tag "${{ steps.bump.outputs.tag }}"
           git push origin HEAD:${{ github.ref_name }}

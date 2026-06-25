@@ -87,7 +87,7 @@ inference:
   num_workers:              32
 
 meta:
-  version:                  v0.3.0
+  version:                  v0.4.2
   root:                     "{{ *gold }}"
   root_data:                "{{ *gold }}/{{ *id_model }}"
   output_file:              "{{ *gold }}/{{ *id_model }}/output.txt"
