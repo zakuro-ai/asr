@@ -24,10 +24,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends libsndfile1
-          uv pip install --system ".[test]"
+          uv sync --frozen --extra test
 
       - name: Import test
-        run: python -c "import asr_deepspeech; print(f'asr_deepspeech {asr_deepspeech.__version__}')"
+        run: uv run python -c "import asr_deepspeech; print(f'asr_deepspeech {asr_deepspeech.__version__}')"
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
+        run: uv run python -m pytest tests/ -v --tb=short
