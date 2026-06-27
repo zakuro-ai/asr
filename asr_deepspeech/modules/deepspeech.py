@@ -163,7 +163,7 @@ class DeepSpeech(nn.Module):
         loader=None,
         manifest=None,
         batch_size=None,
-        device="cpu",
+        device="auto",
         num_workers=32,
         dist=None,
         verbose=False,
