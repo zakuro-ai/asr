@@ -1,7 +1,7 @@
 import ast
 
 import torch
-from sakura import asr_metrics
+from sakura.functional import asr_metrics
 from sakura.ml import AsyncTrainer
 from torch.nn import CTCLoss
 from torch.optim.lr_scheduler import StepLR
