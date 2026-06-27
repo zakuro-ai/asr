@@ -5,7 +5,6 @@ import asr_deepspeech
 
 SKIP_MODULES = {
     "asr_deepspeech.multiproc",
-    "asr_deepspeech.trainers.__main__",
 }
 
 

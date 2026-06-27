@@ -8,7 +8,7 @@ class BucketingSampler(Sampler):
         Samples batches assuming they are in order of size to batch similarly
         sized samples together.
         """
-        super(BucketingSampler, self).__init__(data_source)
+        super(BucketingSampler, self).__init__()
         self.data_source = data_source
         ids = list(range(0, len(data_source)))
         self.bins = [ids[i : i + batch_size] for i in range(0, len(ids), batch_size)]
