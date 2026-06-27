@@ -101,5 +101,10 @@ jobs:
           cyclonedx-py environment -o sbom.json
           gh release upload "${{ needs.bump-and-release.outputs.tag }}" sbom.json --clobber
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
+      # Temporarily disabled: PyPI Trusted Publishing rejects the OIDC token
+      # ("invalid-publisher": no matching publisher configured on pypi.org for
+      # this repo/workflow/environment). A request is open with PyPI; until they
+      # provision the trusted publisher, this step would fail every release and
+      # block the pipeline. Re-enable by uncommenting once PyPI confirms.
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
