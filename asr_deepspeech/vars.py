@@ -16,3 +16,20 @@ if torch.cuda.is_available():
 
 supported_rnns = {"lstm": nn.LSTM, "rnn": nn.RNN, "gru": nn.GRU}
 supported_rnns_inv = dict((v, k) for k, v in supported_rnns.items())
+
+
+def resolve_rnn_type(spec):
+    """Map an RNN spec to its class without ``eval``.
+
+    Accepts ``"nn.LSTM"``, ``"LSTM"``, ``"lstm"`` (and rnn/gru variants) or an
+    already-resolved class (passthrough).
+    """
+    if isinstance(spec, type):
+        return spec
+    key = str(spec).split(".")[-1].lower()
+    try:
+        return supported_rnns[key]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported rnn_type {spec!r}; expected one of {sorted(supported_rnns)}"
+        ) from exc

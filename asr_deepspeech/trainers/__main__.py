@@ -1,3 +1,5 @@
+import ast
+
 import torch
 from sakura import asr_metrics
 from sakura.ml import AsyncTrainer
@@ -7,6 +9,14 @@ from torch.optim.lr_scheduler import StepLR
 from asr_deepspeech import cfg
 from asr_deepspeech.modules import DeepSpeech
 from asr_deepspeech.trainers import DeepSpeechTrainer
+
+
+def parse_betas(value):
+    """Parse optimizer betas from a string like "(0.9, 0.999)" or a native list."""
+    if isinstance(value, (tuple, list)):
+        return tuple(float(x) for x in value)
+    return tuple(float(x) for x in ast.literal_eval(value))
+
 
 if __name__ == "__main__":
     # Instantiate the model, optimizer and scheduler
@@ -31,7 +41,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
         lr=cfg.optim.lr,
-        betas=eval(cfg.optim.betas),
+        betas=parse_betas(cfg.optim.betas),
         eps=cfg.optim.eps,
         weight_decay=cfg.optim.weight_decay,
     )
