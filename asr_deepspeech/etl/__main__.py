@@ -22,6 +22,17 @@ if __name__ == "__main__":
     )
     parser.add_argument("--landing", default=None, help="Override landing path from config")
     parser.add_argument("--bronze", default=None, help="Override bronze path from config")
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download the dataset from its public source into landing before processing",
+    )
+    parser.add_argument(
+        "--subset",
+        default="dev-clean-2",
+        help="Subset to download (librispeech), e.g. dev-clean-2, dev-clean, test-clean",
+    )
+    parser.add_argument("--url", default=None, help="Override the download URL")
     parser.add_argument("--test-size", type=float, default=0.1)
     args = parser.parse_args()
 
@@ -29,6 +40,9 @@ if __name__ == "__main__":
     bronze = args.bronze or cfg.bronze
 
     dataset = DATASETS[args.dataset](cfg.fq)
+    if args.download:
+        print(f"Downloading {args.dataset} ({args.subset}) into {landing} ...")
+        dataset.download(landing, subset=args.subset, url=args.url)
     dataset = dataset.run(landing, bronze)
 
     dataset_df = dataset.filter_duration(cfg.min_duration, cfg.max_duration)

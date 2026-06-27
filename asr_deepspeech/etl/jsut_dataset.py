@@ -10,6 +10,21 @@ class JSUTDataset:
         self._fq = fq
         self._df = None
 
+    def download(self, landing, subset=None, url=None):
+        """JSUT is not publicly downloadable from here.
+
+        The corpus is served from a private Google Drive filestore (see
+        ``config.yml`` ``filestore_id`` / ``gdrive_uri``), which needs Drive
+        credentials. Place the extracted JSUT corpus under ``landing`` manually
+        (so ``run`` can find ``transcript_utf8.txt`` + WAVs), or use the public
+        LibriSpeech subsets via ``--dataset librispeech --download``.
+        """
+        raise NotImplementedError(
+            "JSUT auto-download is unavailable (private gdrive filestore). "
+            "Provide the corpus under `landing` manually, or use "
+            "`--dataset librispeech --download` (public OpenSLR)."
+        )
+
     def run(self, landing, bronze):
         # Process text
         transcripts = listfiles(landing, ["transcript_utf8.txt"])
