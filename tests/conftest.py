@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 import soundfile as sf
-from types import SimpleNamespace
 
 # Set config path before importing asr_deepspeech to avoid path resolution issues on Windows
 config_path = Path(__file__).parent.parent / "asr_deepspeech" / "config.yml"

@@ -1,23 +1,24 @@
+import pandas as pd
+import pytest
 import torch
 import torch.nn as nn
-import pytest
-import pandas as pd
-from asr_deepspeech.data.parsers import SpectrogramParser
+
+from asr_deepspeech.audio.wav_converter import WAVConverter
 from asr_deepspeech.data.dataset import SpectrogramDataset
-from asr_deepspeech.functional import _collate_fn, check_loss, to_np
 from asr_deepspeech.data.loaders import AudioDataLoader
-from asr_deepspeech.modules.blocks import (
-    SequenceWise,
-    InferenceBatchSoftmax,
-    Lookahead,
-    BatchRNN,
-    MaskConv,
-)
-from asr_deepspeech.modules.deepspeech import DeepSpeech
+from asr_deepspeech.data.parsers import SpectrogramParser
 from asr_deepspeech.etl.jsut_dataset import JSUTDataset
 from asr_deepspeech.etl.librispeech_dataset import LibriSpeechDataset
+from asr_deepspeech.functional import _collate_fn, check_loss, to_np
 from asr_deepspeech.loggers.tensorboard_logger import TensorBoardLogger
-from asr_deepspeech.audio.wav_converter import WAVConverter
+from asr_deepspeech.modules.blocks import (
+    BatchRNN,
+    InferenceBatchSoftmax,
+    Lookahead,
+    MaskConv,
+    SequenceWise,
+)
+from asr_deepspeech.modules.deepspeech import DeepSpeech
 
 # Labels map: char -> int index.  Index 0 is intentionally unused (CTC blank).
 LABELS_MAP = {c: i + 1 for i, c in enumerate("abcdefghijklmnopqrstuvwxyz ")}
@@ -220,6 +221,7 @@ def test_check_loss_nan():
 
 def test_to_np_converts_tensor():
     import numpy as np
+
     t = torch.tensor([1.0, 2.0, 3.0])
     arr = to_np(t)
     assert isinstance(arr, np.ndarray)
@@ -458,6 +460,7 @@ def test_tensorboard_logger_init(tmp_path):
 
 def test_tensorboard_logger_load_previous_values(tmp_path):
     import torch
+
     logger = TensorBoardLogger(
         id="test_run",
         log_dir=str(tmp_path / "tb_logs2"),
@@ -474,6 +477,7 @@ def test_tensorboard_logger_load_previous_values(tmp_path):
 
 def test_tensorboard_logger_update(tmp_path):
     import torch
+
     logger = TensorBoardLogger(
         id="test_run",
         log_dir=str(tmp_path / "tb_logs3"),
@@ -538,7 +542,7 @@ def test_deepspeech_call_with_loader(audio_conf, label_csv):
     # Build a minimal fake loader: one batch with shape matching model expectations
     # Input: (B=1, 1, freq, time=40), targets: flat int tensor, percentages, sizes
     inputs = torch.randn(1, 1, EXPECTED_FREQ_BINS, 40)
-    targets = torch.IntTensor([1, 2, 3])   # 3 chars
+    targets = torch.IntTensor([1, 2, 3])  # 3 chars
     input_percentages = torch.FloatTensor([1.0])
     target_sizes = torch.IntTensor([3])
 
