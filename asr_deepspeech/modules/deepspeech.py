@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 from collections import OrderedDict
 
@@ -125,7 +127,7 @@ class DeepSpeech(nn.Module):
             for m in list(self.parameters())[:-nlayers]:
                 m.requires_grad = False
 
-    def forward(self, x, lengths):
+    def forward(self, x: torch.Tensor, lengths: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         lengths = lengths.cpu().int()
         output_lengths = self.get_seq_lens(lengths)
         x, _ = self.conv(x, output_lengths)
@@ -270,7 +272,7 @@ class DeepSpeech(nn.Module):
 
             return wer * 100, cer * 100, output_data
 
-    def get_seq_lens(self, input_length):
+    def get_seq_lens(self, input_length: torch.Tensor) -> torch.Tensor:
         """
         Given a 1D Tensor or Variable containing integer sequence lengths, return a 1D
         tensor or variable containing the size sequences that will be output by the network.
