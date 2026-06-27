@@ -52,7 +52,7 @@ class SpectrogramParser(AudioParser):
         spect, phase = librosa.magphase(D)
         # S = log(S+1)
         spect = np.log1p(spect)
-        spect = torch.FloatTensor(spect)
+        spect = torch.from_numpy(spect).float()
         if self.normalize:
             mean = spect.mean()
             std = spect.std()
