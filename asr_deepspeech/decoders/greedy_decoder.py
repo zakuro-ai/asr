@@ -1,5 +1,4 @@
 import torch
-from six.moves import xrange
 
 from .decoder import Decoder
 
@@ -14,7 +13,7 @@ class GreedyDecoder(Decoder):
         """Given a list of numeric sequences, returns the corresponding strings"""
         strings = []
         offsets = [] if return_offsets else None
-        for x in xrange(len(sequences)):
+        for x in range(len(sequences)):
             seq_len = sizes[x] if sizes is not None else len(sequences[x])
             string, string_offsets = self.process_string(sequences[x], seq_len, remove_repetitions)
             strings.append([string])  # We only return one path

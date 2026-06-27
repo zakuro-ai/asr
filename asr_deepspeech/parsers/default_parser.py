@@ -48,7 +48,6 @@ parser.add_argument(
     type=int,
     help="Save checkpoint per batch. 0 means never save",
 )
-parser.add_argument("--visdom", dest="visdom", action="store_true", help="Turn on visdom graphing")
 parser.add_argument(
     "--tensorboard", dest="tensorboard", action="store_true", help="Turn on tensorboard graphing"
 )
@@ -62,7 +61,7 @@ parser.add_argument(
     help="Log parameter values and gradients",
 )
 parser.add_argument(
-    "--id", default="Deepspeech training", help="Identifier for visdom/tensorboard run"
+    "--id", default="Deepspeech training", help="Identifier for the tensorboard run"
 )
 
 parser.add_argument(
