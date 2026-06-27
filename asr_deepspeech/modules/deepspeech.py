@@ -16,6 +16,7 @@ from asr_deepspeech.modules.blocks import (
     MaskConv,
     SequenceWise,
 )
+from asr_deepspeech.vars import resolve_rnn_type
 
 
 class DeepSpeech(nn.Module):
@@ -41,7 +42,7 @@ class DeepSpeech(nn.Module):
         self.context = context
         self.rnn_hidden_size = rnn_hidden_size
         self.rnn_hidden_layers = rnn_hidden_layers
-        self.rnn_type = eval(rnn_type)
+        self.rnn_type = resolve_rnn_type(rnn_type)
         self.labels = dict([(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()])
         self.bidirectional = bidirectional
         self.sample_rate = self.audio_conf.sample_rate
