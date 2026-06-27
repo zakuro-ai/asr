@@ -8,6 +8,7 @@ from torch import nn
 
 from asr_deepspeech.data.loaders import get_loader
 from asr_deepspeech.decoders import GreedyDecoder
+from asr_deepspeech.device import resolve_device
 from asr_deepspeech.modules.blocks import (
     BatchRNN,
     InferenceBatchSoftmax,
@@ -159,7 +160,7 @@ class DeepSpeech(nn.Module):
         loader=None,
         manifest=None,
         batch_size=None,
-        device="cuda",
+        device="cpu",
         num_workers=32,
         dist=None,
         verbose=False,
@@ -169,6 +170,7 @@ class DeepSpeech(nn.Module):
         restart_from=None,
         cuda=True,
     ):
+        device = resolve_device(device)
         with torch.no_grad():
             if loader is None:
                 loader, _ = self.get_loader(

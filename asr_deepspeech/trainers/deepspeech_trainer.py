@@ -6,6 +6,7 @@ from sakura.ml import SakuraTrainer
 from tqdm import tqdm
 
 from asr_deepspeech import check_loss
+from asr_deepspeech.device import autocast, make_grad_scaler, resolve_device
 
 
 class DeepSpeechTrainer(SakuraTrainer):
@@ -25,6 +26,8 @@ class DeepSpeechTrainer(SakuraTrainer):
         scheduler=None,
         overwrite_lr=None,
     ):
+        device = resolve_device(device)
+        device_test = resolve_device(device_test)
         super(DeepSpeechTrainer, self).__init__(
             model,
             optimizer=optimizer,
@@ -66,20 +69,21 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
         loader = train_loader
-        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+        use_amp = self.mixed_precision and self._device.type == "cuda"
+        scaler = make_grad_scaler(self._device, enabled=self.mixed_precision)
 
         for iter, data in tqdm(
             enumerate(loader, start=0), total=len(loader), desc=self.description()
         ):
-            if self.mixed_precision:
-                with torch.cuda.amp.autocast():
+            if use_amp:
+                with autocast(self._device, enabled=True):
                     valid_loss, loss, loss_value = self.fit(data)
             else:
                 valid_loss, loss, loss_value = self.fit(data)
 
             if valid_loss:
                 self._optimizer.zero_grad()
-                if self.mixed_precision:
+                if use_amp:
                     scaler.scale(loss).backward()
                     scaler.step(self._optimizer)
                     scaler.update()
@@ -89,7 +93,6 @@ class DeepSpeechTrainer(SakuraTrainer):
                 current.loss += loss_value
             else:
                 print("Loss non valid, skipped")
-                pass
 
         self.update(current, best, loader, update_best=False)
         self._scheduler.step() if self._scheduler is not None else None

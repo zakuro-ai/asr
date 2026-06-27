@@ -39,6 +39,15 @@ def audio_conf():
 
 
 @pytest.fixture
+def label_csv(tmp_path):
+    """Minimal label CSV with 26 characters (a-z)."""
+    chars = list("abcdefghijklmnopqrstuvwxyz")
+    path = tmp_path / "labels.csv"
+    pd.DataFrame({"label": chars}).to_csv(str(path), index=False)
+    return path
+
+
+@pytest.fixture
 def manifest_csv(tmp_path, wav_16k):
     """Two-row CSV manifest: each row points at the same synthetic WAV with a short label."""
     rows = [

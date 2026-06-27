@@ -26,8 +26,8 @@ trainer:
   checkpoint_path:          null
   output_file:              "{{ *var }}/{{ *id_model }}/output.txt"
   epochs:                   1000
-  device:                   cuda
-  device_test:              cuda
+  device:                   auto
+  device_test:              auto
   mixed_precision:          true
   overwrite_lr:             null
 

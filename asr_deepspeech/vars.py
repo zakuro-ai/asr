@@ -11,7 +11,8 @@ windows = {
 }
 
 torch.manual_seed(123456)
-torch.cuda.manual_seed_all(123456)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(123456)
 
 supported_rnns = {"lstm": nn.LSTM, "rnn": nn.RNN, "gru": nn.GRU}
 supported_rnns_inv = dict((v, k) for k, v in supported_rnns.items())
