@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 import torch.utils.data.distributed
@@ -97,7 +99,7 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.update(current, best, loader, update_best=False)
         self._scheduler.step() if self._scheduler is not None else None
 
-    def fit(self, data):
+    def fit(self, data) -> tuple[bool, torch.Tensor, float]:
         inputs, targets, input_percentages, target_sizes = data
         input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
         # measure data loading time
