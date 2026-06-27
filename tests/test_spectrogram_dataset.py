@@ -1,4 +1,3 @@
-import pandas as pd
 import pytest
 import torch
 import torch.nn as nn
@@ -340,16 +339,6 @@ def test_mask_conv_forward():
 
 
 # ── DeepSpeech model ─────────────────────────────────────────────────────────
-
-
-@pytest.fixture
-def label_csv(tmp_path):
-    """Minimal label CSV with 26 characters (a-z)."""
-    chars = list("abcdefghijklmnopqrstuvwxyz")
-    df = pd.DataFrame({"label": chars})
-    path = tmp_path / "labels.csv"
-    df.to_csv(str(path), index=False)
-    return path
 
 
 # Number of labels the CSV produces: 26 letters (a–z only; no space in the fixture)
