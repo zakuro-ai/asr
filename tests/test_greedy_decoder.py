@@ -1,5 +1,6 @@
-import torch
 import pytest
+import torch
+
 from asr_deepspeech.decoders import GreedyDecoder
 
 # Labels: blank=0, then A-E, then space

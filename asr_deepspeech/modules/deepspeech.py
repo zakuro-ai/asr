@@ -2,6 +2,7 @@ import math
 from collections import OrderedDict
 
 import pandas as pd
+import torch
 from ascii_graph import Pyasciigraph
 from torch import nn
 
@@ -283,8 +284,6 @@ class DeepSpeech(nn.Module):
 
 
 if __name__ == "__main__":
-    import torch
-
     from asr_deepspeech import cfg
 
     # # Instantiate the model, optimizer and scheduler
