@@ -16,8 +16,8 @@ def _collate_fn(batch):
     minibatch_size = len(batch)
     max_seqlength = longest_sample.size(1)
     inputs = torch.zeros(minibatch_size, 1, freq_size, max_seqlength)
-    input_percentages = torch.FloatTensor(minibatch_size)
-    target_sizes = torch.IntTensor(minibatch_size)
+    input_percentages = torch.zeros(minibatch_size, dtype=torch.float32)
+    target_sizes = torch.zeros(minibatch_size, dtype=torch.int32)
     targets = []
     for x in range(minibatch_size):
         sample = batch[x]
@@ -28,14 +28,14 @@ def _collate_fn(batch):
         input_percentages[x] = seq_length / float(max_seqlength)
         target_sizes[x] = len(target)
         targets.extend(target)
-    targets = torch.IntTensor(targets)
+    targets = torch.tensor(targets, dtype=torch.int32)
     return inputs, targets, input_percentages, target_sizes
 
 
 def reduce_tensor(tensor, world_size, reduce_op_max=False):
     rt = tensor.clone()
     dist.all_reduce(
-        rt, op=dist.reduce_op.MAX if reduce_op_max is True else dist.reduce_op.SUM
+        rt, op=dist.ReduceOp.MAX if reduce_op_max is True else dist.ReduceOp.SUM
     )  # Default to sum
     if not reduce_op_max:
         rt /= world_size
