@@ -40,6 +40,10 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.mixed_precision = mixed_precision
         self.output_file = output_file
         self.overwrite_lr = overwrite_lr
+        # The GradScaler must persist across epochs: its loss-scale is calibrated
+        # over the first iterations, so re-creating it each epoch resets that
+        # calibration and (on short epochs) skips every optimizer step.
+        self.scaler = torch.amp.GradScaler("cuda") if mixed_precision else None
         self.load()
 
     def run(self, train_loader, test_loader):
@@ -66,7 +70,7 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
         loader = train_loader
-        scaler = torch.amp.GradScaler("cuda") if self.mixed_precision else None
+        scaler = self.scaler  # persistent across epochs (see __init__)
 
         for iter, data in tqdm(
             enumerate(loader, start=0), total=len(loader), desc=self.description()
