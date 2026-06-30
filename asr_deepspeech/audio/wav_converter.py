@@ -1,4 +1,5 @@
 import os
+import subprocess
 import wave
 
 from gnutools.concurrent import ProcessPoolExecutorBar
@@ -23,11 +24,17 @@ class WAVConverter:
     def main(wav_file, landing, bronze, overwrite):
         wav_output = wav_file.replace(landing, bronze)
         try:
-            assert os.path.exists(wav_output) & (not overwrite)
+            assert os.path.exists(wav_output) and (not overwrite)
             assert WAVConverter.fq(wav_output) == 16000
         except Exception:
             os.makedirs(parent(wav_output), exist_ok=True)
-            os.system(f"nohup ffmpeg -i {wav_file} -ar 16000 {wav_output} -y >/dev/null 2>&1")
+            # Argument list (no shell) so paths cannot inject shell commands.
+            subprocess.run(
+                ["ffmpeg", "-i", wav_file, "-ar", "16000", wav_output, "-y"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
         finally:
             assert WAVConverter.fq(wav_output) == 16000
 

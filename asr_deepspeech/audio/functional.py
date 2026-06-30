@@ -1,5 +1,4 @@
 import contextlib
-import os
 import subprocess
 import wave
 from tempfile import NamedTemporaryFile
@@ -35,28 +34,63 @@ def fq(path):
 
 
 def get_audio_length(path):
-    output = subprocess.check_output(['soxi -D "%s"' % path.strip()], shell=True)
-    return float(output)
+    # Read duration from the file header (soundfile/wave); no external `soxi` binary
+    # and no shell invocation, which removes a shell-injection vector on `path`.
+    return duration(path)
 
 
 def audio_with_sox(path, sample_rate, start_time, end_time):
+    """Trim and resample `path` with sox, returning the loaded audio.
+
+    Uses an argument list (no shell) so paths cannot inject shell commands.
+    """
     with NamedTemporaryFile(suffix=".wav") as tar_file:
         tar_filename = tar_file.name
-        sox_params = 'sox "{}" -r {} -c 1 -b 16 -e si {} trim {} ={} >/dev/null 2>&1'.format(
-            path, sample_rate, tar_filename, start_time, end_time
-        )
-        os.system(sox_params)
+        sox_params = [
+            "sox",
+            str(path),
+            "-r",
+            str(sample_rate),
+            "-c",
+            "1",
+            "-b",
+            "16",
+            "-e",
+            "si",
+            tar_filename,
+            "trim",
+            str(start_time),
+            "=%s" % end_time,
+        ]
+        subprocess.run(sox_params, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return load_audio(tar_filename, sample_rate)
 
 
 def augment_audio_with_sox(path, sample_rate, tempo, gain):
+    """Apply tempo/gain augmentation with sox, returning the loaded audio.
+
+    Uses an argument list (no shell) so paths cannot inject shell commands.
+    """
     with NamedTemporaryFile(suffix=".wav") as augmented_file:
         augmented_filename = augmented_file.name
-        sox_augment_params = ["tempo", "{:.3f}".format(tempo), "gain", "{:.3f}".format(gain)]
-        sox_params = 'sox "{}" -r {} -c 1 -b 16 -e si {} {} >/dev/null 2>&1'.format(
-            path, sample_rate, augmented_filename, " ".join(sox_augment_params)
-        )
-        os.system(sox_params)
+        sox_params = [
+            "sox",
+            str(path),
+            "-r",
+            str(sample_rate),
+            "-c",
+            "1",
+            "-b",
+            "16",
+            "-e",
+            "si",
+            augmented_filename,
+            "tempo",
+            "{:.3f}".format(tempo),
+            "gain",
+            "{:.3f}".format(gain),
+        ]
+        subprocess.run(sox_params, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return load_audio(augmented_filename, sample_rate)
 
 
