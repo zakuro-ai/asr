@@ -3,9 +3,8 @@ import pkgutil
 
 import asr_deepspeech
 
-SKIP_MODULES = {
-    "asr_deepspeech.multiproc",
-}
+# Every module must import cleanly (the apex-era multiproc launcher was removed).
+SKIP_MODULES: set[str] = set()
 
 
 def test_version():

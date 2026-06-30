@@ -13,10 +13,10 @@ class NoiseInjection(object):
         the more noise added.
         Modified code from https://github.com/willfrey/audio/blob/master/torchaudio/transforms.py
         """
-        if not os.path.exists(path):
+        if path is None or not os.path.exists(path):
             print("Directory doesn't exist: {}".format(path))
             raise IOError
-        self.paths = path is not None and librosa.util.find_files(path)
+        self.paths = librosa.util.find_files(path)
         self.sample_rate = sample_rate
         self.noise_levels = noise_levels
 
