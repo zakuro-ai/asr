@@ -55,16 +55,21 @@ name = "asr-deepspeech"
 dynamic = ["version"]
 description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro.ai" }]
 requires-python = ">=3.9"
 keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
+# Runtime dependencies are declared under [project.dependencies] in pyproject.toml.
 
 [tool.hatch.version]
 path = "asr_deepspeech/__init__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
 packages = ["asr_deepspeech"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"asr_deepspeech/config.yml" = "asr_deepspeech/config.yml"
 ```
 
 
@@ -131,23 +136,19 @@ pip install asr-deepspeech
 ```
 
 ## Test
+The test suite uses `pytest` (with a coverage gate). Run it with:
 ```
-make test
+make test          # runs: python -m pytest tests/ -v
 ```
-You should be able to get an output like
-```python
-=1= TEST PASSED : asr_deepspeech
-=1= TEST PASSED : asr_deepspeech.data
-=1= TEST PASSED : asr_deepspeech.data.dataset
-=1= TEST PASSED : asr_deepspeech.data.loaders
-=1= TEST PASSED : asr_deepspeech.data.parsers
-=1= TEST PASSED : asr_deepspeech.data.samplers
-=1= TEST PASSED : asr_deepspeech.decoders
-=1= TEST PASSED : asr_deepspeech.loggers
-=1= TEST PASSED : asr_deepspeech.modules
-=1= TEST PASSED : asr_deepspeech.parsers
-=1= TEST PASSED : asr_deepspeech.test
-=1= TEST PASSED : asr_deepspeech.trainers
+You should see every test passing, e.g.:
+```
+tests/test_audio_functional.py ....                              [  5%]
+tests/test_decoders_and_audio.py .................              [ 26%]
+tests/test_greedy_decoder.py ...                                 [ 30%]
+tests/test_imports.py ..                                         [ 33%]
+tests/test_spectrogram_dataset.py ....................................  [100%]
+
+===================== 79 passed =====================
 ```
 
 # Datasets
