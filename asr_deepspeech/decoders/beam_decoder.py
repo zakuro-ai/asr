@@ -20,7 +20,10 @@ class BeamCTCDecoder(Decoder):
         try:
             from ctcdecode import CTCBeamDecoder
         except ImportError:
-            raise ImportError("BeamCTCDecoder requires paddledecoder package.")
+            raise ImportError(
+                "BeamCTCDecoder requires the ctcdecode package. "
+                "Install it from https://github.com/parlance/ctcdecode"
+            )
         self.decoder = CTCBeamDecoder(
             labels,
             lm_path,

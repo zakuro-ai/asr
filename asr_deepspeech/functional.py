@@ -35,7 +35,7 @@ def _collate_fn(batch):
 def reduce_tensor(tensor, world_size, reduce_op_max=False):
     rt = tensor.clone()
     dist.all_reduce(
-        rt, op=dist.reduce_op.MAX if reduce_op_max is True else dist.reduce_op.SUM
+        rt, op=dist.ReduceOp.MAX if reduce_op_max is True else dist.ReduceOp.SUM
     )  # Default to sum
     if not reduce_op_max:
         rt /= world_size

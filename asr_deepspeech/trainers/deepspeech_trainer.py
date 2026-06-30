@@ -66,13 +66,13 @@ class DeepSpeechTrainer(SakuraTrainer):
         self.optimizer_to(self._optimizer, self._device)
         current, best = self._metrics.train.current, self._metrics.train.best
         loader = train_loader
-        scaler = torch.cuda.amp.GradScaler() if self.mixed_precision else None
+        scaler = torch.amp.GradScaler("cuda") if self.mixed_precision else None
 
         for iter, data in tqdm(
             enumerate(loader, start=0), total=len(loader), desc=self.description()
         ):
             if self.mixed_precision:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     valid_loss, loss, loss_value = self.fit(data)
             else:
                 valid_loss, loss, loss_value = self.fit(data)
