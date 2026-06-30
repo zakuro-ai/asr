@@ -26,8 +26,13 @@ class SpectrogramParser(AudioParser):
         self.normalize = normalize
         self.speed_volume_perturb = speed_volume_perturb
         self.spec_augment = spec_augment
+        # `noise_levels` may be given directly, or derived from noise_min/noise_max.
+        noise_levels = getattr(audio_conf, "noise_levels", None) or (
+            audio_conf.noise_min,
+            audio_conf.noise_max,
+        )
         self.noiseInjector = (
-            NoiseInjection(audio_conf.noise_dir, self.sample_rate, audio_conf.noise_levels)
+            NoiseInjection(audio_conf.noise_dir, self.sample_rate, noise_levels)
             if audio_conf.noise_dir is not None
             else None
         )

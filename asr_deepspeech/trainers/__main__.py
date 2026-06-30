@@ -31,7 +31,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
         lr=cfg.optim.lr,
-        betas=eval(cfg.optim.betas),
+        betas=tuple(cfg.optim.betas),
         eps=cfg.optim.eps,
         weight_decay=cfg.optim.weight_decay,
     )
