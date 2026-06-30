@@ -19,7 +19,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Gate the release on the same lint + test suite as CI so a red build can
+  # never be tagged or published to PyPI.
+  verify:
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libsndfile1
+          uv sync --frozen --extra test
+
+      - name: Lint and format check
+        run: |
+          uv tool run ruff check .
+          uv tool run ruff format --check .
+
+      - name: Run tests
+        run: uv run python -m pytest tests/ -v --tb=short --cov=asr_deepspeech --cov-report=term-missing --cov-fail-under=50
+
   bump-and-release:
+    needs: verify
     if: "!contains(github.event.head_commit.message, '[skip release]')"
     runs-on: ubuntu-latest
     outputs:
