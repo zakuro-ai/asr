@@ -2,6 +2,7 @@ import math
 from collections import OrderedDict
 
 import pandas as pd
+import torch
 from ascii_graph import Pyasciigraph
 from torch import nn
 
@@ -14,6 +15,25 @@ from asr_deepspeech.modules.blocks import (
     MaskConv,
     SequenceWise,
 )
+
+_RNN_TYPES = {"lstm": nn.LSTM, "gru": nn.GRU, "rnn": nn.RNN}
+
+
+def _resolve_rnn_type(rnn_type):
+    """Resolve an rnn_type given as a class or a string (e.g. "nn.LSTM", "lstm").
+
+    Replaces a previous ``eval(rnn_type)`` call, which executed arbitrary code
+    from the (potentially untrusted) config file.
+    """
+    if not isinstance(rnn_type, str):
+        return rnn_type
+    key = rnn_type.split(".")[-1].lower()
+    try:
+        return _RNN_TYPES[key]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported rnn_type {rnn_type!r}; expected one of {sorted(_RNN_TYPES)}"
+        ) from exc
 
 
 class DeepSpeech(nn.Module):
@@ -39,7 +59,7 @@ class DeepSpeech(nn.Module):
         self.context = context
         self.rnn_hidden_size = rnn_hidden_size
         self.rnn_hidden_layers = rnn_hidden_layers
-        self.rnn_type = eval(rnn_type)
+        self.rnn_type = _resolve_rnn_type(rnn_type)
         self.labels = dict([(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()])
         self.bidirectional = bidirectional
         self.sample_rate = self.audio_conf.sample_rate
@@ -283,8 +303,6 @@ class DeepSpeech(nn.Module):
 
 
 if __name__ == "__main__":
-    import torch
-
     from asr_deepspeech import cfg
 
     # # Instantiate the model, optimizer and scheduler
