@@ -11,7 +11,8 @@ class DistributedBucketingSampler(Sampler):
         Samples batches assuming they are in order of size to batch similarly
         sized samples together.
         """
-        super(DistributedBucketingSampler, self).__init__(data_source)
+        # torch's Sampler.__init__ no longer accepts a data_source argument.
+        super().__init__()
         if num_replicas is None:
             num_replicas = get_world_size()
         if rank is None:

@@ -161,6 +161,33 @@ def test_audio_data_loader_collate(manifest_csv, audio_conf):
     assert target_sizes.shape[0] == 2
 
 
+def test_bucketing_sampler_batches():
+    """BucketingSampler must instantiate (Sampler.__init__ takes no data_source)."""
+    from asr_deepspeech.data.samplers import BucketingSampler
+
+    sampler = BucketingSampler(list(range(10)), batch_size=3)
+    batches = list(iter(sampler))
+    assert len(sampler) == 4  # ceil(10 / 3)
+    assert sorted(i for b in batches for i in b) == list(range(10))
+
+
+def test_get_loader_end_to_end(manifest_csv, audio_conf):
+    """get_loader builds a BucketingSampler-backed loader yielding collated batches.
+
+    Regression guard for the real training/inference data path (the sampler's
+    super().__init__ broke on modern torch and AudioDataLoader bypassed it)."""
+    from asr_deepspeech.data.loaders import get_loader
+    from asr_deepspeech.data.samplers import BucketingSampler
+
+    loader, sampler = get_loader(
+        audio_conf, LABELS_MAP, str(manifest_csv), batch_size=2, num_workers=0
+    )
+    assert isinstance(sampler, BucketingSampler)
+    inputs, targets, input_percentages, target_sizes = next(iter(loader))
+    assert inputs.ndim == 4 and inputs.shape[1] == 1
+    assert input_percentages.shape[0] == 2 and target_sizes.shape[0] == 2
+
+
 def test_collate_fn_output_shape():
     # Build two fake (spect, transcript) samples of different lengths
     spect1 = torch.ones(EXPECTED_FREQ_BINS, 10)
