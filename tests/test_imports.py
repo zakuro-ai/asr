@@ -3,12 +3,8 @@ import pkgutil
 
 import asr_deepspeech
 
-# asr_deepspeech.trainers.__main__ is a training entry point that imports
-# optional sakura symbols (asr_metrics / AsyncTrainer) not present in a minimal
-# install; it is exercised at runtime, not by the import sweep.
-SKIP_MODULES = {
-    "asr_deepspeech.trainers.__main__",
-}
+# Every module (including the training entry points) must import cleanly.
+SKIP_MODULES: set[str] = set()
 
 
 def test_version():

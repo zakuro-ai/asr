@@ -173,7 +173,7 @@ python -m asr_deepspeech.etl
 
 To train on a single gpu
 ```bash
-sakura -m asr_deepspeech.trainers
+python -m asr_deepspeech.trainers
 ```
 
 ## Pretrained model

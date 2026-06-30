@@ -1,6 +1,5 @@
 import torch
-from sakura import asr_metrics
-from sakura.ml import AsyncTrainer
+from sakura.functional import asr_metrics
 from torch.nn import CTCLoss
 from torch.optim.lr_scheduler import StepLR
 
@@ -46,7 +45,6 @@ if __name__ == "__main__":
         metrics=asr_metrics,
         **vars(cfg.trainer),
     )
-    trainer = AsyncTrainer(trainer=trainer)
 
-    # Run the trainer
+    # Run the trainer (train + evaluate each epoch on a single GPU)
     trainer.run(train_loader=train_loader, test_loader=test_loader)
