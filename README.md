@@ -92,6 +92,10 @@ pip install asr-deepspeech
 uv pip install asr-deepspeech
 ```
 
+If you want to run the project with an explicit configuration file, copy
+`example_conf.env` to `.env` and source it before launching the package. The
+template points `ZAK_ASR_CONFIG` at the bundled `asr_deepspeech/config.yml`.
+
 
 # Makefile commands
 Exhaustive list of make commands:
