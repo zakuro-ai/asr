@@ -150,9 +150,25 @@ You should be able to get an output like
 =1= TEST PASSED : asr_deepspeech.trainers
 ```
 
+# Configuration
+
+The application is driven by a single YAML config (`asr_deepspeech/config.yml`) loaded into the
+global `cfg` object at import time. To point the package at your own config without editing the
+bundled file, set the `ZAK_ASR_CONFIG` environment variable to the path of your YAML.
+
+An example environment file is provided. Copy it to `.env`, adjust the values, and load it before
+running the package:
+
+```bash
+cp example_conf.env .env
+export $(grep -v '^#' .env | xargs)
+```
+
+`.env` is gitignored, so your local configuration is never committed.
+
 # Datasets
 
-By default we process the JSUT dataset. See the `config` section to know how to process a custom dataset.
+By default we process the JSUT dataset. See the [Configuration](#configuration) section to know how to process a custom dataset.
 ```python
 from gnutools.remote import gdrive
 from asr_deepspeech import cfg
