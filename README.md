@@ -56,7 +56,7 @@ dynamic = ["version"]
 description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro.ai" }]
+authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro-ai.com" }]
 requires-python = ">=3.9"
 keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
 
