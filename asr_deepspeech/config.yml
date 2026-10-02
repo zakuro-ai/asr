@@ -30,6 +30,10 @@ trainer:
   device_test:              auto
   mixed_precision:          true
   overwrite_lr:             null
+  runtime:                  sakura   # sakura | vanilla (synchronous reference)
+  async_eval:               true     # overlap evaluation with training (sakura only)
+  rolling_checkpoints:      true
+  seed:                     123456
 
 loaders:
   train_manifest:           "{{ *bronze }}/{{ *id_dst }}/train.csv"
