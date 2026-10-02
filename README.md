@@ -8,6 +8,8 @@
 </h1>
 
 <p align="center">
+  <a href="#whats-new-in-05">What's new</a> •
+  <a href="#benchmark">Benchmark</a> •
   <a href="#modules">Modules</a> •
   <a href="#code-structure">Code structure</a> •
   <a href="#installing-the-application">Installing the application</a> •
@@ -19,251 +21,142 @@
 </p>
 
 
-This repository offers a clean code version of the original repository from SeanNaren with classes and modular
-components (eg trainers, models, loggers...).
+DeepSpeech2 speech recognition (English / Japanese) in PyTorch, trained with the
+[Sakura](https://github.com/zakuro-ai/sakura) runtime. A clean, modular take on SeanNaren's
+implementation (trainers, models, loggers, decoders), driven by a single YAML configuration.
+A pretrained Japanese model reaches `CER = 34` on the JSUT test set.
 
-I have added a configuration file to manage the parameters set in the model. You will also find a pretrained model in japanese performing a `CER = 34` on JSUT test set .
+# What's new in 0.5
 
-# Modules
+* **Sakura 1.0 trainer.** `DeepSpeechTrainer` is now a plain class that drives a `SakuraRuntime`
+  through a `DDPAdapter`: `MixedPrecision` (autocast + GradScaler), `AsyncEval` (evaluation
+  overlapped with the next epoch, with an adaptive gate that measures both modes and keeps the
+  faster one) and `AsyncCheckpoint` (atomic rolling checkpoints written off the training thread).
+* **Safer checkpoints.** New checkpoints are plain tensors/dicts (`torch.load(weights_only=True)`),
+  written atomically; checkpoints from <= 0.4 still load. A resumed run continues from the newest
+  rolling checkpoint.
+* **Fewer silent failures.** Invalid-loss batches are counted and logged, a run where *every*
+  batch is invalid aborts, failed asynchronous evaluations are reported, and the import-time global
+  RNG seeding is gone (use `seed:` in the config).
+* **Reproducible benchmark** (`benchmarks/run.py`) with committed results, see below.
+* Breaking: Python >= 3.10, `sakura-ml>=1.0`, the unused `zakuro-ai` dependency is dropped and the
+  trainer constructor changed (see [CHANGELOG](CHANGELOG.md)).
 
-At a granular level, ASRDeepSpeech is a library that consists of the following components:
+# Benchmark
 
-| Component | Description |
-| ---- | --- |
-| **asr_deepspeech** | Speech Recognition package |
-| **asr_deepspeech.data** | Data related module |
-| **asr_deepspeech.data.dataset** | Build the dataset |
-| **asr_deepspeech.data.loaders** | Load the dataset |
-| **asr_deepspeech.data.parsers** | Parse the dataset |
-| **asr_deepspeech.data.samplers** | Sample the dataset |
-| **asr_deepspeech.decoders** | Decode the generated text |
-| **asr_deepspeech.loggers** | Loggers |
-| **asr_deepspeech.modules** | Components of the network |
-| **asr_deepspeech.parsers** | Arguments parser |
-| **asr_deepspeech.tests** | Test units |
-| **asr_deepspeech.trainers** | Trainers |
+`python benchmarks/run.py` trains the same DeepSpeech2 (GRU 3x512) on deterministic synthetic
+spectrograms with the same seed, varying only the runtime:
 
+| arm | what runs |
+|---|---|
+| `vanilla` | synchronous evaluation and checkpoint writes, hand-rolled GradScaler (0.4 behaviour) |
+| `sakura-sync` | Sakura runtime, async checkpoint, synchronous evaluation |
+| `sakura-async` | Sakura runtime, adaptive async evaluation + async checkpoint |
 
-# Code structure
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+RTX 2080 Ti, torch 2.14.1+cu130, fp16 autocast, 10 epochs (raw JSON in `benchmarks/results/`):
 
-[project]
-name = "asr-deepspeech"
-dynamic = ["version"]
-description = "ASRDeepspeech (English / Japanese) with DeepSpeech2 in PyTorch"
-readme = "README.md"
-license = { text = "MIT" }
-authors = [{ name = "CADIC Jean-Maximilien", email = "git@zakuro-ai.com" }]
-requires-python = ">=3.9"
-keywords = ["asr", "deepspeech", "speech-recognition", "japanese", "pytorch"]
+| workload | vanilla | sakura-sync | sakura-async | best CER |
+|---|---:|---:|---:|---|
+| 512 train / 512 eval utterances | 37.0 s | 36.0 s (1.03x) | **33.9 s (1.09x)** | 92.87 for all arms |
+| 512 train / 2048 eval utterances | 57.8 s | 54.8 s (1.05x) | 55.6 s (1.04x) | 92.50 / 92.55 / 92.55 |
 
-[tool.hatch.version]
-path = "asr_deepspeech/__init__.py"
+How to read this honestly:
 
-[tool.hatch.build.targets.wheel]
-packages = ["asr_deepspeech"]
-```
+* The gain is **modest (4-9%)** and, with one run per arm, partly within run-to-run noise
+  (about +/-3% between epochs). Error rates match: Sakura changes *when* work happens, not what.
+* Evaluation is overlapped on a thread, so the part of `DeepSpeech.__call__` that is plain
+  Python (greedy decoding, Levenshtein) still competes for the GIL with the training loop.
+  Moving evaluation to a Sakura worker process is the obvious next step and is not done yet.
+* The final epoch can never overlap its own evaluation, so short runs under-sell the effect.
+* The data is synthetic, so CER stays near chance; this benchmark measures throughput, not
+  accuracy. A CPU run on a shared laptop was too noisy to report and is deliberately not included.
 
+Reproduce: `python benchmarks/run.py --epochs 10 --device cuda --train-size 512 --eval-size 512 --batch-size 32 --hidden 512 --layers 3`.
 
-# Installing the application
-To clone and run this application, you'll need the following installed on your computer:
-- [Git](https://git-scm.com)
-- Docker Desktop
-   - [Install Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install/)
-   - [Install Docker Desktop on Windows](https://docs.docker.com/desktop/install/windows-install/)
-   - [Install Docker Desktop on Linux](https://docs.docker.com/desktop/install/linux-install/)
-- [Python](https://www.python.org/downloads/)
+# Installation
 
 ```bash
-# Clone this repository
-git clone https://github.com/zakuro-ai/asr
-
-# Go into the repository
-cd asr
+pip install asr-deepspeech            # pulls sakura-ml>=1.0
+# or from source
+git clone https://github.com/zakuro-ai/asr && cd asr
+uv sync --extra test
 ```
 
-Install the package:
+Python >= 3.10 and [PyTorch](https://pytorch.org/get-started/locally/) are required. Docker images
+are available through `make docker-sandbox`.
+
+# Quickstart
+
 ```bash
-pip install asr-deepspeech
-# or with uv:
-uv pip install asr-deepspeech
+python -m asr_deepspeech.etl                              # download + prepare JSUT
+python -m asr_deepspeech.trainers                         # train (Sakura runtime)
+python -m asr_deepspeech.trainers --runtime vanilla       # synchronous reference loop
+python -m asr_deepspeech.trainers --no-async-eval         # Sakura, synchronous evaluation
+python -m asr_deepspeech                                  # evaluate the pretrained model
 ```
 
+From Python:
 
-# Makefile commands
-Exhaustive list of make commands:
-```
-build               # Build the wheel package
-test                # Run the test suite
-docker-vanilla      # Build the vanilla Docker image
-docker-sandbox      # Build the sandbox Docker image
-docker              # Build all Docker images
-clean               # Remove build artifacts
-```
-# Environments
-We are providing a support for local or docker setup. However we recommend to use docker to avoid any difficulty to run
- the code. 
-If you decide to run the code locally you will need Python >=3.9.
-Several libraries are needed to be installed for training to work.
-Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
-
-## Docker
-
-> **Note**
-> 
-> Running this application by using Docker is recommended.
-
-To build and run the docker image
-```
-make docker-sandbox
-```
-
-## PythonEnv
-
-> **Warning**
-> 
-> Running this application by using PythonEnv is possible but *not* recommended.
-```
-pip install asr-deepspeech
-```
-
-## Test
-```
-make test
-```
-You should be able to get an output like
 ```python
-=1= TEST PASSED : asr_deepspeech
-=1= TEST PASSED : asr_deepspeech.data
-=1= TEST PASSED : asr_deepspeech.data.dataset
-=1= TEST PASSED : asr_deepspeech.data.loaders
-=1= TEST PASSED : asr_deepspeech.data.parsers
-=1= TEST PASSED : asr_deepspeech.data.samplers
-=1= TEST PASSED : asr_deepspeech.decoders
-=1= TEST PASSED : asr_deepspeech.loggers
-=1= TEST PASSED : asr_deepspeech.modules
-=1= TEST PASSED : asr_deepspeech.parsers
-=1= TEST PASSED : asr_deepspeech.test
-=1= TEST PASSED : asr_deepspeech.trainers
+import torch
+from torch.nn import CTCLoss
+from asr_deepspeech import cfg
+from asr_deepspeech.modules import DeepSpeech
+from asr_deepspeech.trainers import DeepSpeechTrainer
+
+model = DeepSpeech(**vars(cfg.model))
+train_loader, _ = model.get_loader(
+    manifest=cfg.loaders.train_manifest, batch_size=48, num_workers=8
+)
+test_loader, _ = model.get_loader(manifest=cfg.loaders.val_manifest, batch_size=48, num_workers=8)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1.5e-4)
+
+trainer = DeepSpeechTrainer(
+    model,
+    CTCLoss(reduction="sum"),
+    optimizer,
+    epochs=100,
+    model_path="gold/model.pth",
+    runtime="sakura",
+    async_eval=True,
+)
+metrics = trainer.run(train_loader, test_loader)  # -> Metrics(best_cer, best_epoch, history, ...)
 ```
+
+`model_path` receives the best-CER model; per-epoch resume checkpoints go to
+`<model_path dir>/checkpoints/` (two newest kept). Re-running the same command resumes.
 
 # Configuration
 
-The application is driven by a single YAML config (`asr_deepspeech/config.yml`) loaded into the
-global `cfg` object at import time. To point the package at your own config without editing the
-bundled file, set the `ZAK_ASR_CONFIG` environment variable to the path of your YAML.
+Everything is driven by `asr_deepspeech/config.yml`, loaded into the global `cfg`. Point
+`ZAK_ASR_CONFIG` at your own YAML to override it. Trainer keys:
 
-An example environment file is provided. Copy it to `.env`, adjust the values, and load it before
-running the package:
+| key | default | meaning |
+|---|---|---|
+| `runtime` | `sakura` | `sakura` or `vanilla` |
+| `async_eval` | `true` | overlap evaluation with training (adaptive; `sakura` only) |
+| `rolling_checkpoints` | `true` | keep resumable per-epoch checkpoints |
+| `mixed_precision` | `true` | autocast on CUDA |
+| `device`, `device_test` | `auto` | training / evaluation device |
+| `seed` | `123456` | RNG seed (`null` to disable) |
+| `overwrite_lr` | `null` | override the learning rate after a restore |
+
+# Modules
+
+| Component | Description |
+| ---- | --- |
+| `asr_deepspeech.trainers` | `DeepSpeechTrainer` (Sakura / vanilla runtimes) and the training CLI |
+| `asr_deepspeech.checkpoint` | atomic, `weights_only`-safe checkpoints; legacy loader |
+| `asr_deepspeech.metrics` | `Metrics` / `EvalResult` run bookkeeping |
+| `asr_deepspeech.modules` | DeepSpeech2 network |
+| `asr_deepspeech.data` | datasets, loaders, parsers, samplers, synthetic data |
+| `asr_deepspeech.decoders` | greedy / beam decoders |
+| `asr_deepspeech.etl` | dataset download and manifests |
+| `benchmarks/` | runtime benchmark and committed results |
+
+# Development
 
 ```bash
-cp example_conf.env .env
-export $(grep -v '^#' .env | xargs)
+make test                       # pytest
+uv tool run ruff check . && uv tool run ruff format --check .
 ```
-
-`.env` is gitignored, so your local configuration is never committed.
-
-# Datasets
-
-By default we process the JSUT dataset. See the [Configuration](#configuration) section to know how to process a custom dataset.
-```python
-from gnutools.remote import gdrive
-from asr_deepspeech import cfg
-
-# This will download the JSUT dataset in your /tmp
-gdrive(cfg.gdrive_uri)
-```
-## ETL
-
-```
-python -m asr_deepspeech.etl
-```
-
-# Running the application
-
-## Training a Model
-
-To train on a single gpu
-```bash
-sakura -m asr_deepspeech.trainers
-```
-
-## Pretrained model
-```bash
-python -m asr_deepspeech
-```
-
-
-# Notes
-<li> Clean verbose during training 
-
-```
-================ VARS ===================
-manifest: clean
-distributed: True
-train_manifest: __data__/manifests/train_clean.json
-val_manifest: __data__/manifests/val_clean.json
-model_path: /data/ASRModels/deepspeech_jp_500_clean.pth
-continue_from: None
-output_file: /data/ASRModels/deepspeech_jp_500_clean.txt
-main_proc: True
-rank: 0
-gpu_rank: 0
-world_size: 2
-==========================================
-```
-<li> Progress bar
-
-```
-...
-clean - 0:00:46 >> 2/1000 (1) | Loss 95.1626 | Lr 0.30e-3 | WER/CER 98.06/95.16 - (98.06/[95.16]): 100%|██████████████████████| 18/18 [00:46<00:00,  2.59s/it]
-clean - 0:00:47 >> 3/1000 (1) | Loss 96.3579 | Lr 0.29e-3 | WER/CER 97.55/97.55 - (98.06/[95.16]): 100%|██████████████████████| 18/18 [00:47<00:00,  2.61s/it]
-clean - 0:00:47 >> 4/1000 (1) | Loss 97.5705 | Lr 0.29e-3 | WER/CER 100.00/100.00 - (98.06/[95.16]): 100%|████████████████████| 18/18 [00:47<00:00,  2.66s/it]
-clean - 0:00:48 >> 5/1000 (1) | Loss 97.8628 | Lr 0.29e-3 | WER/CER 98.74/98.74 - (98.06/[95.16]): 100%|██████████████████████| 18/18 [00:50<00:00,  2.78s/it]
-clean - 0:00:50 >> 6/1000 (5) | Loss 97.0118 | Lr 0.29e-3 | WER/CER 96.26/93.61 - (96.26/[93.61]): 100%|██████████████████████| 18/18 [00:49<00:00,  2.76s/it]
-clean - 0:00:50 >> 7/1000 (5) | Loss 97.2341 | Lr 0.28e-3 | WER/CER 98.35/98.35 - (96.26/[93.61]):  17%|███▊                   | 3/18 [00:10<00:55,  3.72s/it]
-...
-```
-
-<li> Separated text file to check wer/cer with histogram on CER values (best/last/worst result)
-
-```
-================= 100.00/34.49 =================
------ BEST -----
-Ref:良ある人ならそんな風にに話しかけないだろう
-Hyp:用ある人ならそんな風にに話しかけないだろう
-WER:100.0  - CER:4.761904761904762
------ LAST -----
-Ref:すみませんがオースチンさんは5日にはです
-Hyp:すみませんがースンさんは一つかにはです
-WER:100.0  - CER:25.0
------ WORST -----
-Ref:小切には内がみられる
-Hyp:コには内先金地つ作みが見られる
-WER:100.0  - CER:90.0
-CER histogram
-|###############################################################################
-|███████████                                                           6  0-10  
-|███████████████████████████                                          15  10-20 
-|███████████████████████████████████████████████████████████████████  36  20-30 
-|█████████████████████████████████████████████████████████████████    35  30-40 
-|██████████████████████████████████████████████████                   27  40-50 
-|█████████████████████████████                                        16  50-60 
-|█████████                                                             5  60-70 
-|███████████                                                           6  70-80 
-|                                                                      0  80-90 
-|█                                                                     1  90-100
-=============================================
-```
-
-
-## Acknowledgements
-
-Thanks to [Egor](https://github.com/EgorLakomkin) and [Ryan](https://github.com/ryanleary) for their contributions!
-
-This is a fork from https://github.com/SeanNaren/deepspeech.pytorch. The code has been improved for the readability only.
-
-For any question please contact me at j.cadic[at]protonmail.ch

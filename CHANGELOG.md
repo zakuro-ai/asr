@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - Unreleased
+
+### Changed
+- **Breaking:** `DeepSpeechTrainer` no longer subclasses `sakura.ml.SakuraTrainer`; it is a plain
+  class driving the Sakura 1.0 runtime (`MixedPrecision`, `AsyncEval`, `AsyncCheckpoint`).
+  Constructor: `DeepSpeechTrainer(model, criterion, optimizer, scheduler=None, *, epochs, model_path, ...)`;
+  the `metrics=` argument is gone and `AsyncTrainer` is no longer needed.
+- Requires Python >= 3.10 and `sakura-ml>=1.0`; the unused `zakuro-ai` dependency is removed.
+- Mean epoch loss is now the mean over valid batches (it was a sum divided by the dataset size).
+- Checkpoints hold plain tensors/dicts and are written atomically; 0.4 checkpoints still load.
+
+### Added
+- `runtime: vanilla|sakura`, `async_eval`, `rolling_checkpoints` and `seed` trainer options (CLI: `--runtime`, `--no-async-eval`).
+- Resume from the newest rolling checkpoint; `Metrics` with per-epoch history.
+- `benchmarks/run.py` + committed GPU results; synthetic data helper `asr_deepspeech.data.synthetic`.
+- Trainer, resume and runtime-parity tests.
+
+### Fixed
+- Training aborts instead of looping when every batch has an invalid loss; skipped batches are counted.
+- Failed asynchronous evaluations are logged instead of disappearing.
+- Removed import-time global RNG seeding.
+
+
 ### Added
 - Project governance files: CODEOWNERS, SECURITY.md, CONTRIBUTING.md, and issue/PR templates (#34)
 

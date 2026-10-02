@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "device": "cuda",
+    "torch": "2.14.1+cu130",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "epochs": 10,
+    "train_size": 512,
+    "eval_size": 512,
+    "layers": 3,
+    "hidden": 512
+  },
+  "results": [
+    {
+      "arm": "vanilla",
+      "total_s": 36.999,
+      "epoch_s": [
+        4.892,
+        3.692,
+        3.439,
+        3.525,
+        3.586,
+        3.4,
+        3.7,
+        3.431,
+        3.62,
+        3.71
+      ],
+      "best_cer": 92.86717214265656,
+      "best_epoch": 0,
+      "eval_modes": null,
+      "skipped_batches": 0
+    },
+    {
+      "arm": "sakura-sync",
+      "total_s": 36.006,
+      "epoch_s": [
+        2.019,
+        3.241,
+        3.46,
+        3.379,
+        3.622,
+        3.346,
+        3.831,
+        3.644,
+        3.388,
+        3.245
+      ],
+      "best_cer": 92.86717214265656,
+      "best_epoch": 0,
+      "eval_modes": null,
+      "skipped_batches": 0
+    },
+    {
+      "arm": "sakura-async",
+      "total_s": 33.92,
+      "epoch_s": [
+        2.462,
+        3.634,
+        2.779,
+        3.214,
+        3.285,
+        3.199,
+        3.413,
+        3.153,
+        3.107,
+        3.821
+      ],
+      "best_cer": 92.86717214265656,
+      "best_epoch": 0,
+      "eval_modes": [
+        "sync",
+        "sync",
+        "async",
+        "async",
+        "async",
+        "async",
+        "async",
+        "async",
+        "async",
+        "sync-final"
+      ],
+      "skipped_batches": 0
+    }
+  ]
+}
