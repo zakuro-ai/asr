@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   class driving the Sakura 1.0 runtime (`MixedPrecision`, `AsyncEval`, `AsyncCheckpoint`).
   Constructor: `DeepSpeechTrainer(model, criterion, optimizer, scheduler=None, *, epochs, model_path, ...)`;
   the `metrics=` argument is gone and `AsyncTrainer` is no longer needed.
-- Requires Python >= 3.10 and `sakura-ml>=1.0`; the unused `zakuro-ai` dependency is removed.
+- Requires Python >= 3.10 and `sakura-ml>=1.1`; the unused `zakuro-ai` dependency is removed.
 - Mean epoch loss is now the mean over valid batches (it was a sum divided by the dataset size).
 - Checkpoints hold plain tensors/dicts and are written atomically; 0.4 checkpoints still load.
 

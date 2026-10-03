@@ -78,3 +78,159 @@ def test_all_invalid_batches_raise(tmp_path, label_csv, audio_conf):
     t.criterion = lambda *a, **k: torch.tensor(float("nan"), requires_grad=True)
     with pytest.raises(RuntimeError, match="invalid loss"):
         t.run(*_loaders())
+
+
+def test_process_dispatch_matches_thread(tmp_path, label_csv, audio_conf):
+    kw = dict(runtime="sakura", async_eval=True, epochs=4)
+    a = _trainer(tmp_path / "t", label_csv, audio_conf, dispatch="thread", **kw).run(*_loaders())
+    b = _trainer(tmp_path / "p", label_csv, audio_conf, dispatch="process", **kw).run(*_loaders())
+    assert [r["epoch"] for r in b.history] == [0, 1, 2, 3]
+    assert all("cer" in r for r in b.history)
+    assert a.best_cer == pytest.approx(b.best_cer, rel=1e-4)
+    assert len(list((tmp_path / "p" / "checkpoints").glob("epoch_*.pt"))) <= 2
+
+
+def test_rejects_bad_dispatch(tmp_path, label_csv, audio_conf):
+    with pytest.raises(ValueError):
+        _trainer(tmp_path, label_csv, audio_conf, dispatch="gpu")
+
+
+@pytest.mark.parametrize("runtime", ["vanilla", "sakura"])
+def test_stop_cer_stops_early(tmp_path, label_csv, audio_conf, runtime):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime=runtime, epochs=6, stop_cer=1000.0)
+    m = t.run(*_loaders())
+    assert m.stopped_at is not None and m.time_to_target_s > 0
+    assert len(t.epoch_seconds) < 6
+
+
+def test_checkpoint_cadence_throttles_writes(tmp_path, label_csv, audio_conf):
+    t = _trainer(
+        tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=3, checkpoint_every_s=3600
+    )
+    t.run(*_loaders())
+    assert len(list((tmp_path / "checkpoints").glob("epoch_*.pt"))) == 1
+
+
+def test_learnable_task_converges_on_cpu(tmp_path, label_csv, audio_conf):
+    from asr_deepspeech.data.synthetic import synthetic_loader
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=40, stop_cer=25.0)
+    t.model.train()
+    for g in t.optimizer.param_groups:
+        g["lr"] = 3e-3
+    train = synthetic_loader(64, 16, seed=1, learnable=True)
+    test = synthetic_loader(32, 16, seed=2, learnable=True)
+    m = t.run(train, test)
+    assert m.best_cer < 80, m.best_cer  # unlearnable noise targets stay ~90+
+
+
+def test_callbacks_receive_epoch_and_eval_events(tmp_path, label_csv, audio_conf):
+    events = []
+
+    class CB:
+        def on_train_epoch(self, epoch, loss, seconds):
+            events.append(("train", epoch))
+
+        def on_eval(self, epoch, wer, cer):
+            events.append(("eval", epoch))
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=2, callbacks=CB())
+    t.run(*_loaders())
+    assert events == [("train", 0), ("eval", 0), ("train", 1), ("eval", 1)]
+
+
+def test_a_failing_callback_does_not_kill_training(tmp_path, label_csv, audio_conf):
+    class CB:
+        def on_eval(self, *a):
+            raise RuntimeError("sink down")
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, callbacks=CB())
+    assert len(t.run(*_loaders()).history) == 1
+
+
+@pytest.mark.parametrize("runtime", ["vanilla", "sakura"])
+def test_gradient_clipping_keeps_weights_finite_under_an_exploding_lr(
+    tmp_path, label_csv, audio_conf, runtime
+):
+    t = _trainer(
+        tmp_path,
+        label_csv,
+        audio_conf,
+        runtime=runtime,
+        epochs=2,
+        max_grad_norm=1.0,
+        async_eval=False,
+    )
+    for g in t.optimizer.param_groups:
+        g["lr"] = 50.0  # absurd: unclipped Adam on a CTC sum loss blows up
+    t.run(*_loaders())
+    assert all(torch.isfinite(p).all() for p in t.model.parameters())
+
+
+def test_nonfinite_gradients_are_skipped_not_applied(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, max_grad_norm=1.0)
+    calls = {"n": 0}
+    real_backward = torch.Tensor.backward
+
+    def poison_first(self, *a, **k):
+        real_backward(self, *a, **k)
+        calls["n"] += 1
+        if calls["n"] == 1:  # only the first step gets NaN gradients
+            for p in t.model.parameters():
+                if p.grad is not None:
+                    p.grad.fill_(float("nan"))
+
+    torch.Tensor.backward = poison_first
+    try:
+        t.run(*_loaders())
+    finally:
+        torch.Tensor.backward = real_backward
+    assert t.metrics.skipped_batches == 1
+    assert all(torch.isfinite(p).all() for p in t.model.parameters())  # NaN was never applied
+
+
+def test_infeasible_samples_are_dropped_before_ctc(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla")
+    lp = torch.randn(10, 3, 5).log_softmax(2)  # T x N x C
+    out_sizes = torch.tensor([10, 10, 4], dtype=torch.int32)
+    # sample 0: 3 labels ok; sample 1: 'abb' needs T >= 4, ok; sample 2: 6 labels, T=4: infeasible
+    targets = torch.tensor([1, 2, 3, 1, 1, 2, 1, 2, 3, 4, 1, 2], dtype=torch.int32)
+    sizes = torch.tensor([3, 3, 6], dtype=torch.int32)
+    lp2, o2, tg2, s2 = t._drop_infeasible(lp, out_sizes, targets, sizes)
+    assert lp2.shape[1] == 2 and o2.tolist() == [10, 10] and s2.tolist() == [3, 3]
+    assert tg2.tolist() == [1, 2, 3, 1, 1, 2]
+    assert t.metrics.infeasible_samples == 1
+    loss = t.criterion(lp2, tg2, o2, s2)
+    assert torch.isfinite(loss)
+
+
+def test_a_batch_of_only_infeasible_samples_is_skipped(tmp_path, label_csv, audio_conf):
+    from asr_deepspeech.trainers.deepspeech_trainer import _AllInfeasible
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla")
+    lp = torch.randn(3, 1, 5).log_softmax(2)
+    with pytest.raises(_AllInfeasible):
+        t._drop_infeasible(
+            lp,
+            torch.tensor([3], dtype=torch.int32),
+            torch.tensor([1, 2, 3, 4, 1], dtype=torch.int32),
+            torch.tensor([5], dtype=torch.int32),
+        )
+
+
+def test_an_epoch_without_a_finite_gradient_raises(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, max_grad_norm=1.0)
+    real_backward = torch.Tensor.backward
+
+    def poisoned(self, *a, **k):
+        real_backward(self, *a, **k)
+        for p in t.model.parameters():
+            if p.grad is not None:
+                p.grad.fill_(float("nan"))
+
+    torch.Tensor.backward = poisoned
+    try:
+        with pytest.raises(RuntimeError, match="no optimizer step had a finite gradient"):
+            t.run(*_loaders())
+    finally:
+        torch.Tensor.backward = real_backward

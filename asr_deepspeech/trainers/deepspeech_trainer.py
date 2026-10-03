@@ -40,6 +40,7 @@ from asr_deepspeech.metrics import EvalResult, Metrics
 log = logging.getLogger("asr_deepspeech")
 
 RUNTIMES = ("sakura", "vanilla")
+DISPATCH = ("thread", "process")
 
 
 def seed_everything(seed: Optional[int]) -> None:
@@ -59,6 +60,41 @@ def evaluate(
     """Run ``model`` over ``loader`` and return WER / CER in percent."""
     wer, cer, _ = model(loader=loader, device=device, output_file=output_file)
     return EvalResult(wer=float(wer), cer=float(cer))
+
+
+def _init_eval_worker(replica: nn.Module, loader: Any, device: Any, output_file: Optional[str]):
+    """Runs once in the evaluation worker process: pin the replica and loader there."""
+    dev = resolve_device(device)
+    # ``replica`` is a weightless (meta-device) skeleton: shipping 100s of MB of weights at
+    # startup would block the trainer; every evaluation is preceded by a weight load anyway.
+    replica = replica.to_empty(device=dev) if _is_meta(replica) else replica.to(dev)
+    return {"replica": replica.eval(), "loader": loader, "device": dev, "out": output_file}
+
+
+def _is_meta(module: nn.Module) -> bool:
+    return any(p.is_meta for p in module.parameters())
+
+
+def _worker_load_state(state: Dict[str, torch.Tensor]) -> None:
+    from sakura.dispatch import worker_state
+
+    worker_state()["init"]["replica"].load_state_dict(state)
+
+
+def _worker_eval(epoch: int, payload: Any) -> Dict[str, float]:
+    from sakura.dispatch import worker_state
+
+    w = worker_state()["init"]
+    r = evaluate(w["replica"], w["loader"], w["device"], w["out"])
+    return {"wer": r.wer, "cer": r.cer}
+
+
+def _write_checkpoint(state: Dict[str, Any], path: str) -> Dict[str, str]:
+    return {"path": save_checkpoint(state, path)}
+
+
+class _AllInfeasible(Exception):
+    """Every sample of a batch is unalignable (handled as a skipped batch)."""
 
 
 class DeepSpeechTrainer:
@@ -81,8 +117,22 @@ class DeepSpeechTrainer:
         overwrite_lr: override the learning rate after restoring a checkpoint.
         runtime: ``"sakura"`` (accelerated) or ``"vanilla"`` (synchronous reference).
         async_eval: overlap evaluation with training (``runtime="sakura"`` only).
-        rolling_checkpoints: keep the two newest per-epoch resume checkpoints (written
-            asynchronously with ``runtime="sakura"``, synchronously otherwise).
+        rolling_checkpoints: keep the two newest resume checkpoints (written asynchronously
+            with ``runtime="sakura"``, synchronously otherwise).
+        checkpoint_every_s: write resume checkpoints at most every this many seconds
+            (``None`` = every epoch). Bounds checkpoint overhead on fast epochs.
+        dispatch: where Sakura runs background work (async eval / checkpoint writes):
+            ``"thread"`` shares the training GIL, ``"process"`` uses a separate worker
+            process with shared-memory tensor transfer and no GIL contention.
+        max_grad_norm: clip the global gradient norm to this value before every optimizer step
+            (the original DeepSpeech uses 400). A step whose gradient is not finite is skipped
+            instead of corrupting the weights. CTC *sum* losses on long utterances explode
+            without it: a Zambezi Voice run diverged to NaN inside the first epoch.
+        callbacks: optional object with ``on_train_epoch(epoch, train_loss, seconds)`` and/or
+            ``on_eval(epoch, wer, cer)`` methods (both optional); used to stream metrics.
+        stop_cer: stop as soon as a resolved evaluation reaches this CER (percent).
+            ``Metrics.stopped_at`` records the epoch; a run with async evaluation notices
+            the target up to one epoch late.
         seed: optional RNG seed.
     """
 
@@ -104,10 +154,17 @@ class DeepSpeechTrainer:
         runtime: str = "sakura",
         async_eval: bool = True,
         rolling_checkpoints: bool = True,
+        checkpoint_every_s: Optional[float] = None,
+        dispatch: str = "thread",
+        stop_cer: Optional[float] = None,
+        max_grad_norm: Optional[float] = None,
+        callbacks: Optional[Any] = None,
         seed: Optional[int] = None,
     ) -> None:
         if runtime not in RUNTIMES:
             raise ValueError(f"runtime must be one of {RUNTIMES}, got {runtime!r}")
+        if dispatch not in DISPATCH:
+            raise ValueError(f"dispatch must be one of {DISPATCH}, got {dispatch!r}")
         if epochs < 1:
             raise ValueError("epochs must be >= 1")
         self.model = model
@@ -125,6 +182,13 @@ class DeepSpeechTrainer:
         self.runtime = runtime
         self.async_eval = bool(async_eval)
         self.rolling_checkpoints = bool(rolling_checkpoints)
+        self.checkpoint_every_s = checkpoint_every_s
+        self.dispatch = dispatch
+        self.stop_cer = stop_cer
+        self.callbacks = callbacks
+        self.max_grad_norm = max_grad_norm
+        self._finite_steps = 0
+        self._last_ckpt_t: Optional[float] = None
         self.seed = seed
 
         self.metrics = Metrics()
@@ -134,11 +198,25 @@ class DeepSpeechTrainer:
         self._states: Dict[int, Dict[str, torch.Tensor]] = {}
         self._folded = 0
         self._async_eval_svc: Any = None
+        self._stop = False
+        self._run_t0 = 0.0
+        self._bg_dispatcher: Any = None
+        self._bg_writes: List[Any] = []
+
+    def _emit(self, hook: str, *args: Any) -> None:
+        fn = getattr(self.callbacks, hook, None)
+        if callable(fn):
+            try:
+                fn(*args)
+            except Exception:  # a metrics sink must never kill a training run
+                log.exception("callback %s failed", hook)
 
     # ------------------------------------------------------------------ public
 
     def run(self, train_loader: Any, test_loader: Any) -> Metrics:
         """Train for the remaining epochs and return the run :class:`Metrics`."""
+        self._run_t0 = time.perf_counter()
+        self._stop = False
         seed_everything(self.seed)
         self._resume()
         if self.start_epoch >= self.epochs:
@@ -159,11 +237,14 @@ class DeepSpeechTrainer:
         def step(loss: torch.Tensor) -> None:
             if use_amp:
                 scaler.scale(loss).backward()
-                scaler.step(self.optimizer)
+                scaler.unscale_(self.optimizer)
+                if self._clip_ok():
+                    scaler.step(self.optimizer)
                 scaler.update()
             else:
                 loss.backward()
-                self.optimizer.step()
+                if self._clip_ok():
+                    self.optimizer.step()
 
         for epoch in range(self.start_epoch, self.epochs):
             t0 = time.perf_counter()
@@ -173,11 +254,14 @@ class DeepSpeechTrainer:
             )
             self._scheduler_step()
             self.metrics.record(epoch, train_loss=train_loss)
+            self._emit("on_train_epoch", epoch, train_loss, time.perf_counter() - t0)
             result = evaluate(self.model, test_loader, self.device_test, self.output_file)
             self._on_eval(epoch, result, state=self._live_state())
-            if self.rolling_checkpoints:
+            if self.rolling_checkpoints and self._checkpoint_due():
                 self._write_last(epoch)
             self.epoch_seconds.append(time.perf_counter() - t0)
+            if self._stop:
+                break
 
     def _run_sakura(self, train_loader: Any, test_loader: Any) -> None:
         from sakura import SakuraRuntime
@@ -189,6 +273,7 @@ class DeepSpeechTrainer:
         self._folded = 0
         replica = self._make_replica() if self.async_eval else None
         payload = {"replica": replica, "loader": test_loader}
+        process = self.dispatch == "process"
 
         def eval_fn(epoch: int, payload: Dict[str, Any]) -> Dict[str, Any]:
             payload["replica"].load_state_dict(self._states[epoch])
@@ -199,10 +284,26 @@ class DeepSpeechTrainer:
             r = evaluate(model, loader, self.device_test, self.output_file)
             return {"wer": r.wer, "cer": r.cer}
 
-        eval_dispatcher, ckpt_dispatcher = (
-            ThreadDispatcher(max_workers=1),
-            ThreadDispatcher(max_workers=1),
-        )
+        if process:
+            from sakura.dispatch import ProcessDispatcher
+
+            eval_dispatcher = (
+                ProcessDispatcher(
+                    initializer=_init_eval_worker,
+                    initargs=(replica, test_loader, str(self.device_test), self.output_file),
+                    nice=5,
+                )
+                if self.async_eval
+                else None
+            )
+            ckpt_dispatcher = ProcessDispatcher(nice=5)
+            eval_fn = _worker_eval  # noqa: F811 — weights are shipped by `_ship_state`
+        else:
+            eval_dispatcher = ThreadDispatcher(max_workers=1) if self.async_eval else None
+            ckpt_dispatcher = ThreadDispatcher(max_workers=1)
+        self._eval_dispatcher = eval_dispatcher
+        self._bg_dispatcher = ckpt_dispatcher
+        self._bg_writes: List[Any] = []
         try:
             with SakuraRuntime(record_history=False) as rt:
                 if self.mixed_precision and self.device.type == "cuda":
@@ -210,7 +311,7 @@ class DeepSpeechTrainer:
                 if self.async_eval:
                     self._async_eval_svc = AsyncEval(
                         eval_fn=eval_fn,
-                        eval_payload=payload,
+                        eval_payload=None if process else payload,
                         dispatcher=eval_dispatcher,
                         sync_eval_fn=sync_eval_fn,
                         adaptive=True,
@@ -226,15 +327,21 @@ class DeepSpeechTrainer:
                             dispatcher=ckpt_dispatcher,
                             state_provider=lambda: snapshot(self._full_state(self._epoch)),
                             every="epoch",
+                            every_seconds=self.checkpoint_every_s,
                             keep=2,
-                            writer=lambda state, path: {"path": save_checkpoint(state, path)},
+                            writer=_write_checkpoint,
                         )
                     )
                 adapter = DDPAdapter(rt, rank=0, world_size=1)
                 self._train_with_adapter(rt, adapter, train_loader, test_loader)
                 self._fold_results()
+                for fut in self._bg_writes:  # the best model must be on disk when run() returns
+                    fut.result()
+                self._bg_writes.clear()
         finally:
-            eval_dispatcher.shutdown()
+            self._bg_dispatcher = None
+            if eval_dispatcher is not None:
+                eval_dispatcher.shutdown()
             ckpt_dispatcher.shutdown()
 
     def _train_with_adapter(
@@ -242,10 +349,17 @@ class DeepSpeechTrainer:
     ) -> None:
         self.model.to(self.device)
         adapter.on_train_begin(self.model, self.optimizer, train_loader, test_loader)
+        mp = rt.find("mixed_precision")  # its GradScaler (fp16 only) exists after train_begin
+        scaler_present = [mp is not None and getattr(mp, "_scaler", None) is not None]
 
         def step(loss: torch.Tensor) -> None:
             rt.scale_loss(loss).backward()
-            adapter.on_optimizer_step(self.optimizer)
+            adapter.on_optimizer_step(self.optimizer)  # MixedPrecision unscales here
+            finite = self._clip_ok()
+            if not finite and not scaler_present[0]:
+                return  # no GradScaler to skip the step for us: do not apply NaN gradients
+            # With a GradScaler a non-finite gradient is *normal* while it searches for a
+            # workable scale: it must still see the step so it skips it and backs off.
             if not rt.optimizer_step(self.optimizer):
                 self.optimizer.step()
 
@@ -258,15 +372,20 @@ class DeepSpeechTrainer:
             )
             self._scheduler_step()
             self.metrics.record(epoch, train_loss=train_loss)
+            self._emit("on_train_epoch", epoch, train_loss, time.perf_counter() - t0)
             svc = self._async_eval_svc
             if svc is not None and svc.wants_snapshot():
                 self._states[epoch] = self._live_state()
+                if self.dispatch == "process":  # worker runs tasks in order: load, then eval
+                    self._eval_dispatcher.submit(_worker_load_state, self._states[epoch])
             if svc is None:  # synchronous evaluation, like the vanilla runtime
                 result = evaluate(self.model, test_loader, self.device_test, self.output_file)
                 self._on_eval(epoch, result, state=self._live_state())
             adapter.on_epoch_end(epoch, self.model, self.optimizer, {"train_loss": train_loss})
             self._fold_results()
             self.epoch_seconds.append(time.perf_counter() - t0)
+            if self._stop:
+                break
         adapter.on_train_end(self.model)
 
     # ---------------------------------------------------------------- training
@@ -285,13 +404,18 @@ class DeepSpeechTrainer:
         self.model.to(self.device)
         _optimizer_to(self.optimizer, self.device)
         total, valid = 0.0, 0
+        self._finite_steps = 0
         desc = f"epoch {epoch + 1}/{self.epochs}"
         for step, batch in enumerate(tqdm(loader, desc=desc, leave=False)):
             if on_batch is not None:
                 on_batch(self.model, batch, step)
             self.optimizer.zero_grad(set_to_none=True)
-            with autocast(self.device, enabled=use_autocast):
-                loss = self._forward_loss(batch)
+            try:
+                with autocast(self.device, enabled=use_autocast):
+                    loss = self._forward_loss(batch)
+            except _AllInfeasible:
+                self.metrics.skipped_batches += 1
+                continue
             ok, error = check_loss(loss, loss.item())
             if not ok:
                 self.metrics.skipped_batches += 1
@@ -302,6 +426,12 @@ class DeepSpeechTrainer:
             valid += 1
         if valid == 0:
             raise RuntimeError(f"epoch {epoch}: every batch had an invalid loss; aborting")
+        if self.max_grad_norm is not None and self._finite_steps == 0:
+            raise RuntimeError(
+                f"epoch {epoch}: no optimizer step had a finite gradient, so the weights never "
+                "changed. Check mixed precision, the learning rate and "
+                "torch.use_deterministic_algorithms (CTC then runs on cuDNN)."
+            )
         return total / valid
 
     def _forward_loss(self, batch: Tuple[torch.Tensor, ...]) -> torch.Tensor:
@@ -309,8 +439,63 @@ class DeepSpeechTrainer:
         input_sizes = input_percentages.mul(int(inputs.size(3))).int()
         out, output_sizes = self.model.forward(inputs.to(self.device), input_sizes)
         log_probs = out.transpose(0, 1).float().log_softmax(2)  # T x N x H, fp32 for CTC
+        log_probs, output_sizes, targets, target_sizes = self._drop_infeasible(
+            log_probs, output_sizes, targets, target_sizes
+        )
         loss = self.criterion(log_probs, targets, output_sizes, target_sizes)
         return loss.to(self.device) / inputs.size(0)
+
+    def _drop_infeasible(
+        self,
+        log_probs: torch.Tensor,
+        output_sizes: torch.Tensor,
+        targets: torch.Tensor,
+        target_sizes: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Remove samples CTC cannot align: it needs ``T >= len(target) + repeated neighbours``.
+
+        ``zero_infinity=True`` only protects the native CUDA/CPU kernels. With
+        ``torch.use_deterministic_algorithms(True)`` PyTorch dispatches to cuDNN's CTC, whose
+        backward returns NaN for the whole batch if one sample is infeasible. Dropping such
+        samples first makes training independent of which kernel runs.
+        """
+        sizes = target_sizes.tolist()
+        outs = output_sizes.tolist()
+        keep: List[int] = []
+        kept_targets: List[torch.Tensor] = []
+        offset = 0
+        for i, n in enumerate(sizes):
+            tgt = targets[offset : offset + n]
+            offset += n
+            repeats = int((tgt[1:] == tgt[:-1]).sum()) if n > 1 else 0
+            if n > 0 and outs[i] >= n + repeats:
+                keep.append(i)
+                kept_targets.append(tgt)
+        if len(keep) == len(sizes):
+            return log_probs, output_sizes, targets, target_sizes
+        self.metrics.infeasible_samples += len(sizes) - len(keep)
+        if not keep:
+            raise _AllInfeasible()
+        idx = torch.tensor(keep, device=log_probs.device)
+        return (
+            log_probs.index_select(1, idx),
+            output_sizes[torch.tensor(keep)],
+            torch.cat(kept_targets),
+            target_sizes[torch.tensor(keep)],
+        )
+
+    def _clip_ok(self) -> bool:
+        """Clip gradients; False (step must be skipped) if their norm is not finite."""
+        if self.max_grad_norm is None:
+            return True
+        params = [p for g in self.optimizer.param_groups for p in g["params"] if p.grad is not None]
+        norm = torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
+        if torch.isfinite(norm):
+            self._finite_steps += 1
+            return True
+        self.metrics.skipped_batches += 1
+        log.warning("skipped optimizer step: non-finite gradient norm")
+        return False
 
     def _scheduler_step(self) -> None:
         if self.scheduler is not None:
@@ -319,11 +504,14 @@ class DeepSpeechTrainer:
     # ------------------------------------------------------------- evaluation
 
     def _make_replica(self) -> nn.Module:
+        """Evaluation copy of the model. For ``dispatch="process"`` it is a weightless
+        meta-device skeleton that the worker materialises on ``device_test``."""
         import copy
 
-        replica = copy.deepcopy(self.model).to(self.device_test)
-        replica.eval()
-        return replica
+        replica = copy.deepcopy(self.model)
+        if self.dispatch == "process":
+            return replica.to("meta").eval()
+        return replica.to(self.device_test).eval()
 
     def _fold_results(self) -> None:
         """Merge resolved asynchronous evaluations into :attr:`metrics`."""
@@ -344,6 +532,12 @@ class DeepSpeechTrainer:
 
     def _on_eval(self, epoch: int, result: EvalResult, state: Optional[Dict[str, Any]]) -> None:
         self.metrics.record(epoch, wer=result.wer, cer=result.cer)
+        self._emit("on_eval", epoch, result.wer, result.cer)
+        if self.stop_cer is not None and result.cer <= self.stop_cer and not self._stop:
+            self._stop = True
+            self.metrics.stopped_at = epoch
+            self.metrics.time_to_target_s = time.perf_counter() - self._run_t0
+            log.info("epoch %d: reached CER target %.2f", epoch, self.stop_cer)
         if self.metrics.update_best(epoch, result.cer):
             log.info("epoch %d: new best CER %.2f (WER %.2f)", epoch, result.cer, result.wer)
             if state is not None:
@@ -355,7 +549,12 @@ class DeepSpeechTrainer:
                     "scheduler": None,
                     "metrics": self.metrics.state_dict(),
                 }
-                save_checkpoint(payload, self.model_path)
+                if self._bg_dispatcher is not None:  # off the training thread
+                    self._bg_writes.append(
+                        self._bg_dispatcher.submit(_write_checkpoint, payload, self.model_path)
+                    )
+                else:
+                    save_checkpoint(payload, self.model_path)
 
     # ------------------------------------------------------------ checkpoints
 
@@ -370,6 +569,15 @@ class DeepSpeechTrainer:
             epoch=epoch,
             metrics=self.metrics.state_dict(),
         )
+
+    def _checkpoint_due(self) -> bool:
+        if self.checkpoint_every_s is None:
+            return True
+        now = time.monotonic()
+        if self._last_ckpt_t is None or now - self._last_ckpt_t >= self.checkpoint_every_s:
+            self._last_ckpt_t = now
+            return True
+        return False
 
     def _write_last(self, epoch: int) -> None:
         save_checkpoint(

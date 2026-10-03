@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "device": "cuda",
+    "torch": "2.14.1+cu130",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "target": 15.0,
+    "layers": 3,
+    "hidden": 512,
+    "train_size": 512,
+    "eval_size": 1024
+  },
+  "results": [
+    {
+      "arm": "legacy",
+      "reached": true,
+      "time_to_target_s": 104.02,
+      "total_s": 104.47,
+      "epochs_run": 44,
+      "stopped_at_epoch": 43,
+      "best_cer": 14.452961672473869,
+      "mean_epoch_s": 2.374
+    },
+    {
+      "arm": "vanilla+ckpt",
+      "reached": true,
+      "time_to_target_s": 186.91,
+      "total_s": 190.29,
+      "epochs_run": 44,
+      "stopped_at_epoch": 43,
+      "best_cer": 14.452961672473869,
+      "mean_epoch_s": 4.325
+    },
+    {
+      "arm": "sakura-process",
+      "reached": true,
+      "time_to_target_s": 102.02,
+      "total_s": 108.17,
+      "epochs_run": 44,
+      "stopped_at_epoch": 43,
+      "best_cer": 14.452961672473869,
+      "mean_epoch_s": 2.294
+    },
+    {
+      "arm": "sakura-process-30s",
+      "reached": true,
+      "time_to_target_s": 98.06,
+      "total_s": 101.02,
+      "epochs_run": 44,
+      "stopped_at_epoch": 43,
+      "best_cer": 14.452961672473869,
+      "mean_epoch_s": 2.22
+    }
+  ]
+}
