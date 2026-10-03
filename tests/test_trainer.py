@@ -122,3 +122,27 @@ def test_learnable_task_converges_on_cpu(tmp_path, label_csv, audio_conf):
     test = synthetic_loader(32, 16, seed=2, learnable=True)
     m = t.run(train, test)
     assert m.best_cer < 80, m.best_cer  # unlearnable noise targets stay ~90+
+
+
+def test_callbacks_receive_epoch_and_eval_events(tmp_path, label_csv, audio_conf):
+    events = []
+
+    class CB:
+        def on_train_epoch(self, epoch, loss, seconds):
+            events.append(("train", epoch))
+
+        def on_eval(self, epoch, wer, cer):
+            events.append(("eval", epoch))
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=2, callbacks=CB())
+    t.run(*_loaders())
+    assert events == [("train", 0), ("eval", 0), ("train", 1), ("eval", 1)]
+
+
+def test_a_failing_callback_does_not_kill_training(tmp_path, label_csv, audio_conf):
+    class CB:
+        def on_eval(self, *a):
+            raise RuntimeError("sink down")
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, callbacks=CB())
+    assert len(t.run(*_loaders()).history) == 1

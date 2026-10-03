@@ -120,6 +120,8 @@ class DeepSpeechTrainer:
         dispatch: where Sakura runs background work (async eval / checkpoint writes):
             ``"thread"`` shares the training GIL, ``"process"`` uses a separate worker
             process with shared-memory tensor transfer and no GIL contention.
+        callbacks: optional object with ``on_train_epoch(epoch, train_loss, seconds)`` and/or
+            ``on_eval(epoch, wer, cer)`` methods (both optional); used to stream metrics.
         stop_cer: stop as soon as a resolved evaluation reaches this CER (percent).
             ``Metrics.stopped_at`` records the epoch; a run with async evaluation notices
             the target up to one epoch late.
@@ -147,6 +149,7 @@ class DeepSpeechTrainer:
         checkpoint_every_s: Optional[float] = None,
         dispatch: str = "thread",
         stop_cer: Optional[float] = None,
+        callbacks: Optional[Any] = None,
         seed: Optional[int] = None,
     ) -> None:
         if runtime not in RUNTIMES:
@@ -173,6 +176,7 @@ class DeepSpeechTrainer:
         self.checkpoint_every_s = checkpoint_every_s
         self.dispatch = dispatch
         self.stop_cer = stop_cer
+        self.callbacks = callbacks
         self._last_ckpt_t: Optional[float] = None
         self.seed = seed
 
@@ -187,6 +191,14 @@ class DeepSpeechTrainer:
         self._run_t0 = 0.0
         self._bg_dispatcher: Any = None
         self._bg_writes: List[Any] = []
+
+    def _emit(self, hook: str, *args: Any) -> None:
+        fn = getattr(self.callbacks, hook, None)
+        if callable(fn):
+            try:
+                fn(*args)
+            except Exception:  # a metrics sink must never kill a training run
+                log.exception("callback %s failed", hook)
 
     # ------------------------------------------------------------------ public
 
@@ -228,6 +240,7 @@ class DeepSpeechTrainer:
             )
             self._scheduler_step()
             self.metrics.record(epoch, train_loss=train_loss)
+            self._emit("on_train_epoch", epoch, train_loss, time.perf_counter() - t0)
             result = evaluate(self.model, test_loader, self.device_test, self.output_file)
             self._on_eval(epoch, result, state=self._live_state())
             if self.rolling_checkpoints and self._checkpoint_due():
@@ -338,6 +351,7 @@ class DeepSpeechTrainer:
             )
             self._scheduler_step()
             self.metrics.record(epoch, train_loss=train_loss)
+            self._emit("on_train_epoch", epoch, train_loss, time.perf_counter() - t0)
             svc = self._async_eval_svc
             if svc is not None and svc.wants_snapshot():
                 self._states[epoch] = self._live_state()
@@ -431,6 +445,7 @@ class DeepSpeechTrainer:
 
     def _on_eval(self, epoch: int, result: EvalResult, state: Optional[Dict[str, Any]]) -> None:
         self.metrics.record(epoch, wer=result.wer, cer=result.cer)
+        self._emit("on_eval", epoch, result.wer, result.cer)
         if self.stop_cer is not None and result.cer <= self.stop_cer and not self._stop:
             self._stop = True
             self.metrics.stopped_at = epoch

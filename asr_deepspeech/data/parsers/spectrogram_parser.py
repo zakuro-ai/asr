@@ -38,6 +38,10 @@ class SpectrogramParser(AudioParser):
             y = load_randomly_augmented_audio(audio_path, self.sample_rate)
         else:
             y = load_audio(audio_path)
+        return self.parse_waveform(y)
+
+    def parse_waveform(self, y):
+        """Spectrogram of a mono float waveform already loaded at ``sample_rate``."""
         if self.noiseInjector:
             add_noise = np.random.binomial(1, self.noise_prob)
             if add_noise:
