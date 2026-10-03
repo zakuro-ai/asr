@@ -26,6 +26,7 @@ class Metrics:
     best_cer: Optional[float] = None
     best_epoch: Optional[int] = None
     skipped_batches: int = 0
+    infeasible_samples: int = 0
     stopped_at: Optional[int] = None
     time_to_target_s: Optional[float] = None
     history: List[Dict[str, Any]] = field(default_factory=list)

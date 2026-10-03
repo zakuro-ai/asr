@@ -93,6 +93,10 @@ def _write_checkpoint(state: Dict[str, Any], path: str) -> Dict[str, str]:
     return {"path": save_checkpoint(state, path)}
 
 
+class _AllInfeasible(Exception):
+    """Every sample of a batch is unalignable (handled as a skipped batch)."""
+
+
 class DeepSpeechTrainer:
     """Train and evaluate a :class:`~asr_deepspeech.modules.DeepSpeech` model.
 
@@ -183,6 +187,7 @@ class DeepSpeechTrainer:
         self.stop_cer = stop_cer
         self.callbacks = callbacks
         self.max_grad_norm = max_grad_norm
+        self._finite_steps = 0
         self._last_ckpt_t: Optional[float] = None
         self.seed = seed
 
@@ -399,13 +404,18 @@ class DeepSpeechTrainer:
         self.model.to(self.device)
         _optimizer_to(self.optimizer, self.device)
         total, valid = 0.0, 0
+        self._finite_steps = 0
         desc = f"epoch {epoch + 1}/{self.epochs}"
         for step, batch in enumerate(tqdm(loader, desc=desc, leave=False)):
             if on_batch is not None:
                 on_batch(self.model, batch, step)
             self.optimizer.zero_grad(set_to_none=True)
-            with autocast(self.device, enabled=use_autocast):
-                loss = self._forward_loss(batch)
+            try:
+                with autocast(self.device, enabled=use_autocast):
+                    loss = self._forward_loss(batch)
+            except _AllInfeasible:
+                self.metrics.skipped_batches += 1
+                continue
             ok, error = check_loss(loss, loss.item())
             if not ok:
                 self.metrics.skipped_batches += 1
@@ -416,6 +426,12 @@ class DeepSpeechTrainer:
             valid += 1
         if valid == 0:
             raise RuntimeError(f"epoch {epoch}: every batch had an invalid loss; aborting")
+        if self.max_grad_norm is not None and self._finite_steps == 0:
+            raise RuntimeError(
+                f"epoch {epoch}: no optimizer step had a finite gradient, so the weights never "
+                "changed. Check mixed precision, the learning rate and "
+                "torch.use_deterministic_algorithms (CTC then runs on cuDNN)."
+            )
         return total / valid
 
     def _forward_loss(self, batch: Tuple[torch.Tensor, ...]) -> torch.Tensor:
@@ -423,8 +439,50 @@ class DeepSpeechTrainer:
         input_sizes = input_percentages.mul(int(inputs.size(3))).int()
         out, output_sizes = self.model.forward(inputs.to(self.device), input_sizes)
         log_probs = out.transpose(0, 1).float().log_softmax(2)  # T x N x H, fp32 for CTC
+        log_probs, output_sizes, targets, target_sizes = self._drop_infeasible(
+            log_probs, output_sizes, targets, target_sizes
+        )
         loss = self.criterion(log_probs, targets, output_sizes, target_sizes)
         return loss.to(self.device) / inputs.size(0)
+
+    def _drop_infeasible(
+        self,
+        log_probs: torch.Tensor,
+        output_sizes: torch.Tensor,
+        targets: torch.Tensor,
+        target_sizes: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Remove samples CTC cannot align: it needs ``T >= len(target) + repeated neighbours``.
+
+        ``zero_infinity=True`` only protects the native CUDA/CPU kernels. With
+        ``torch.use_deterministic_algorithms(True)`` PyTorch dispatches to cuDNN's CTC, whose
+        backward returns NaN for the whole batch if one sample is infeasible. Dropping such
+        samples first makes training independent of which kernel runs.
+        """
+        sizes = target_sizes.tolist()
+        outs = output_sizes.tolist()
+        keep: List[int] = []
+        kept_targets: List[torch.Tensor] = []
+        offset = 0
+        for i, n in enumerate(sizes):
+            tgt = targets[offset : offset + n]
+            offset += n
+            repeats = int((tgt[1:] == tgt[:-1]).sum()) if n > 1 else 0
+            if n > 0 and outs[i] >= n + repeats:
+                keep.append(i)
+                kept_targets.append(tgt)
+        if len(keep) == len(sizes):
+            return log_probs, output_sizes, targets, target_sizes
+        self.metrics.infeasible_samples += len(sizes) - len(keep)
+        if not keep:
+            raise _AllInfeasible()
+        idx = torch.tensor(keep, device=log_probs.device)
+        return (
+            log_probs.index_select(1, idx),
+            output_sizes[torch.tensor(keep)],
+            torch.cat(kept_targets),
+            target_sizes[torch.tensor(keep)],
+        )
 
     def _clip_ok(self) -> bool:
         """Clip gradients; False (step must be skipped) if their norm is not finite."""
@@ -433,6 +491,7 @@ class DeepSpeechTrainer:
         params = [p for g in self.optimizer.param_groups for p in g["params"] if p.grad is not None]
         norm = torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
         if torch.isfinite(norm):
+            self._finite_steps += 1
             return True
         self.metrics.skipped_batches += 1
         log.warning("skipped optimizer step: non-finite gradient norm")

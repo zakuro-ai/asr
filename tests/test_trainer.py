@@ -169,9 +169,57 @@ def test_gradient_clipping_keeps_weights_finite_under_an_exploding_lr(
 
 def test_nonfinite_gradients_are_skipped_not_applied(tmp_path, label_csv, audio_conf):
     t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, max_grad_norm=1.0)
-    before = [p.detach().clone() for p in t.model.parameters()]
+    calls = {"n": 0}
+    real_backward = torch.Tensor.backward
 
-    # Poison the gradients directly: after backward every grad is NaN.
+    def poison_first(self, *a, **k):
+        real_backward(self, *a, **k)
+        calls["n"] += 1
+        if calls["n"] == 1:  # only the first step gets NaN gradients
+            for p in t.model.parameters():
+                if p.grad is not None:
+                    p.grad.fill_(float("nan"))
+
+    torch.Tensor.backward = poison_first
+    try:
+        t.run(*_loaders())
+    finally:
+        torch.Tensor.backward = real_backward
+    assert t.metrics.skipped_batches == 1
+    assert all(torch.isfinite(p).all() for p in t.model.parameters())  # NaN was never applied
+
+
+def test_infeasible_samples_are_dropped_before_ctc(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla")
+    lp = torch.randn(10, 3, 5).log_softmax(2)  # T x N x C
+    out_sizes = torch.tensor([10, 10, 4], dtype=torch.int32)
+    # sample 0: 3 labels ok; sample 1: 'abb' needs T >= 4, ok; sample 2: 6 labels, T=4: infeasible
+    targets = torch.tensor([1, 2, 3, 1, 1, 2, 1, 2, 3, 4, 1, 2], dtype=torch.int32)
+    sizes = torch.tensor([3, 3, 6], dtype=torch.int32)
+    lp2, o2, tg2, s2 = t._drop_infeasible(lp, out_sizes, targets, sizes)
+    assert lp2.shape[1] == 2 and o2.tolist() == [10, 10] and s2.tolist() == [3, 3]
+    assert tg2.tolist() == [1, 2, 3, 1, 1, 2]
+    assert t.metrics.infeasible_samples == 1
+    loss = t.criterion(lp2, tg2, o2, s2)
+    assert torch.isfinite(loss)
+
+
+def test_a_batch_of_only_infeasible_samples_is_skipped(tmp_path, label_csv, audio_conf):
+    from asr_deepspeech.trainers.deepspeech_trainer import _AllInfeasible
+
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla")
+    lp = torch.randn(3, 1, 5).log_softmax(2)
+    with pytest.raises(_AllInfeasible):
+        t._drop_infeasible(
+            lp,
+            torch.tensor([3], dtype=torch.int32),
+            torch.tensor([1, 2, 3, 4, 1], dtype=torch.int32),
+            torch.tensor([5], dtype=torch.int32),
+        )
+
+
+def test_an_epoch_without_a_finite_gradient_raises(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, max_grad_norm=1.0)
     real_backward = torch.Tensor.backward
 
     def poisoned(self, *a, **k):
@@ -182,9 +230,7 @@ def test_nonfinite_gradients_are_skipped_not_applied(tmp_path, label_csv, audio_
 
     torch.Tensor.backward = poisoned
     try:
-        t.run(*_loaders())
+        with pytest.raises(RuntimeError, match="no optimizer step had a finite gradient"):
+            t.run(*_loaders())
     finally:
         torch.Tensor.backward = real_backward
-    assert t.metrics.skipped_batches > 0
-    for b, p in zip(before, t.model.parameters()):
-        assert torch.equal(b, p.detach())
