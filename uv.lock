@@ -314,7 +314,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0" },
     { name = "python-levenshtein" },
     { name = "pyyaml" },
-    { name = "sakura-ml", git = "https://github.com/zakuro-ai/sakura?tag=v1.0.0" },
+    { name = "sakura-ml", git = "https://github.com/zakuro-ai/sakura?tag=v1.1.0" },
     { name = "scikit-learn" },
     { name = "scipy", specifier = ">=1.13.1" },
     { name = "soundfile" },
@@ -3828,8 +3828,8 @@ wheels = [
 
 [[package]]
 name = "sakura-ml"
-version = "1.0.0"
-source = { git = "https://github.com/zakuro-ai/sakura?tag=v1.0.0#5c45d0645760b445761afac93a2a2ae8e89ab178" }
+version = "1.1.0"
+source = { git = "https://github.com/zakuro-ai/sakura?tag=v1.1.0#06b795e1385d5b9d43db0dabb033e6b841a499c4" }
 dependencies = [
     { name = "chardet" },
     { name = "charset-normalizer" },
