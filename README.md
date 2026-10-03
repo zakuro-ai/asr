@@ -39,7 +39,7 @@ A pretrained Japanese model reaches `CER = 34` on the JSUT test set.
   batch is invalid aborts, failed asynchronous evaluations are reported, and the import-time global
   RNG seeding is gone (use `seed:` in the config).
 * **Time-to-performance benchmark** (`benchmarks/ttp.py`) with committed results, see below.
-* Breaking: Python >= 3.10, `sakura-ml>=1.0`, the unused `zakuro-ai` dependency is dropped and the
+* Breaking: Python >= 3.10, `sakura-ml>=1.1`, the unused `zakuro-ai` dependency is dropped and the
   trainer constructor changed (see [CHANGELOG](CHANGELOG.md)).
 
 # Benchmark: time to performance
@@ -92,7 +92,7 @@ Reproduce: `python benchmarks/ttp.py --device cuda --target 15 --max-epochs 120 
 # Installation
 
 ```bash
-pip install asr-deepspeech            # pulls sakura-ml>=1.0
+pip install asr-deepspeech            # pulls sakura-ml>=1.1
 # or from source
 git clone https://github.com/zakuro-ai/asr && cd asr
 uv sync --extra test
