@@ -6,10 +6,13 @@ A manifest row points at one clip:
 * ``audio`` is ``<shard>#<member>`` and ``offset`` / ``size`` give the clip's byte span
   inside ``<root>/<shard>`` (an uncompressed tar, as produced by Zakuro hub packaging). The
   span is read directly, so a clip costs one seek and one read - no tar scan.
+
+When a row carries ``sha256`` the clip's bytes are verified on every read (``verify=True``).
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import tarfile
 from pathlib import Path
@@ -39,8 +42,12 @@ def read_clip(
     offset: Optional[int] = None,
     size: Optional[int] = None,
     sample_rate: int = 16000,
+    sha256: Optional[str] = None,
 ) -> np.ndarray:
-    """Load one mono float32 waveform from a file or a tar-shard byte span."""
+    """Load one mono float32 waveform from a file or a tar-shard byte span.
+
+    With ``sha256`` the clip's raw bytes are verified first: reading different bytes than the
+    manifest pinned raises ``ValueError`` instead of silently training on them."""
     root = Path(root)
     if "#" in ref:
         shard, member = ref.split("#", 1)
@@ -55,10 +62,19 @@ def read_clip(
                 if extracted is None:
                     raise FileNotFoundError(f"{member} not in {shard_path}")
                 blob = extracted.read()
+        if sha256 and hashlib.sha256(blob).hexdigest() != sha256:
+            raise ValueError(
+                f"{ref}: bytes do not match the manifest sha256 (corrupt or changed shard)"
+            )
         sound, sr = sf.read(io.BytesIO(blob), dtype="float32", always_2d=False)
     else:
         path = Path(ref)
-        sound, sr = sf.read(path if path.is_absolute() else root / path, dtype="float32")
+        path = path if path.is_absolute() else root / path
+        if sha256 and hashlib.sha256(path.read_bytes()).hexdigest() != sha256:
+            raise ValueError(
+                f"{ref}: bytes do not match the manifest sha256 (corrupt or changed file)"
+            )
+        sound, sr = sf.read(path, dtype="float32")
     if sr != sample_rate:
         raise ValueError(f"expected {sample_rate} Hz, got {sr} Hz for {ref}")
     if sound.ndim > 1:
@@ -79,6 +95,7 @@ class ManifestDataset(Dataset, SpectrogramParser):
         spec_augment: bool = False,
         audio_col: str = "audio",
         text_col: str = "transcript",
+        verify: bool = True,
     ) -> None:
         self.rows: List[Dict[str, Any]] = (
             rows.to_dict("records") if isinstance(rows, pd.DataFrame) else [dict(r) for r in rows]
@@ -86,6 +103,7 @@ class ManifestDataset(Dataset, SpectrogramParser):
         self.labels_map = dict(labels)
         self.root = Path(root)
         self.audio_col, self.text_col = audio_col, text_col
+        self.verify = verify
         SpectrogramParser.__init__(self, audio_conf, normalize, False, spec_augment)
 
     def __len__(self) -> int:
@@ -99,6 +117,7 @@ class ManifestDataset(Dataset, SpectrogramParser):
             row.get("offset"),
             row.get("size"),
             self.sample_rate,
+            sha256=(row.get("sha256") if self.verify else None) or None,
         )
         return self.parse_waveform(wave), self.parse_transcript(str(row[self.text_col]))
 

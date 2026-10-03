@@ -85,3 +85,24 @@ def test_dataset_item_and_loader_batch(shard_root, audio_conf):
     inputs, targets, pct, tsizes = next(iter(loader))
     assert inputs.shape[0] == 2 and inputs.shape[1] == 1 and inputs.shape[2] == 161
     assert int(tsizes.sum()) == len(targets)
+
+
+def test_sha256_is_verified_and_corruption_is_refused(shard_root, audio_conf):
+    import hashlib
+
+    root, rows = shard_root
+    with open(root / "audio" / "train-000.tar", "rb") as fh:
+        fh.seek(rows[0]["offset"])
+        blob_bytes = fh.read(rows[0]["size"])
+    rows[0]["sha256"] = hashlib.sha256(blob_bytes).hexdigest()
+    ds = ManifestDataset(rows, {c: i for i, c in enumerate("_ ab")}, audio_conf, root=root)
+    ds[0]  # intact: fine
+    shard = root / "audio" / "train-000.tar"
+    data = bytearray(shard.read_bytes())
+    data[rows[0]["offset"] + 100] ^= 0xFF  # flip one byte inside the clip
+    shard.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match="do not match"):
+        ds[0]
+    ManifestDataset(
+        rows, {c: i for i, c in enumerate("_ ab")}, audio_conf, root=root, verify=False
+    )[0]
