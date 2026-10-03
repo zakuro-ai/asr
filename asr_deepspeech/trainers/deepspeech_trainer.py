@@ -120,6 +120,10 @@ class DeepSpeechTrainer:
         dispatch: where Sakura runs background work (async eval / checkpoint writes):
             ``"thread"`` shares the training GIL, ``"process"`` uses a separate worker
             process with shared-memory tensor transfer and no GIL contention.
+        max_grad_norm: clip the global gradient norm to this value before every optimizer step
+            (the original DeepSpeech uses 400). A step whose gradient is not finite is skipped
+            instead of corrupting the weights. CTC *sum* losses on long utterances explode
+            without it: a Zambezi Voice run diverged to NaN inside the first epoch.
         callbacks: optional object with ``on_train_epoch(epoch, train_loss, seconds)`` and/or
             ``on_eval(epoch, wer, cer)`` methods (both optional); used to stream metrics.
         stop_cer: stop as soon as a resolved evaluation reaches this CER (percent).
@@ -149,6 +153,7 @@ class DeepSpeechTrainer:
         checkpoint_every_s: Optional[float] = None,
         dispatch: str = "thread",
         stop_cer: Optional[float] = None,
+        max_grad_norm: Optional[float] = None,
         callbacks: Optional[Any] = None,
         seed: Optional[int] = None,
     ) -> None:
@@ -177,6 +182,7 @@ class DeepSpeechTrainer:
         self.dispatch = dispatch
         self.stop_cer = stop_cer
         self.callbacks = callbacks
+        self.max_grad_norm = max_grad_norm
         self._last_ckpt_t: Optional[float] = None
         self.seed = seed
 
@@ -226,11 +232,14 @@ class DeepSpeechTrainer:
         def step(loss: torch.Tensor) -> None:
             if use_amp:
                 scaler.scale(loss).backward()
-                scaler.step(self.optimizer)
+                scaler.unscale_(self.optimizer)
+                if self._clip_ok():
+                    scaler.step(self.optimizer)
                 scaler.update()
             else:
                 loss.backward()
-                self.optimizer.step()
+                if self._clip_ok():
+                    self.optimizer.step()
 
         for epoch in range(self.start_epoch, self.epochs):
             t0 = time.perf_counter()
@@ -335,10 +344,17 @@ class DeepSpeechTrainer:
     ) -> None:
         self.model.to(self.device)
         adapter.on_train_begin(self.model, self.optimizer, train_loader, test_loader)
+        mp = rt.find("mixed_precision")  # its GradScaler (fp16 only) exists after train_begin
+        scaler_present = [mp is not None and getattr(mp, "_scaler", None) is not None]
 
         def step(loss: torch.Tensor) -> None:
             rt.scale_loss(loss).backward()
-            adapter.on_optimizer_step(self.optimizer)
+            adapter.on_optimizer_step(self.optimizer)  # MixedPrecision unscales here
+            finite = self._clip_ok()
+            if not finite and not scaler_present[0]:
+                return  # no GradScaler to skip the step for us: do not apply NaN gradients
+            # With a GradScaler a non-finite gradient is *normal* while it searches for a
+            # workable scale: it must still see the step so it skips it and backs off.
             if not rt.optimizer_step(self.optimizer):
                 self.optimizer.step()
 
@@ -409,6 +425,18 @@ class DeepSpeechTrainer:
         log_probs = out.transpose(0, 1).float().log_softmax(2)  # T x N x H, fp32 for CTC
         loss = self.criterion(log_probs, targets, output_sizes, target_sizes)
         return loss.to(self.device) / inputs.size(0)
+
+    def _clip_ok(self) -> bool:
+        """Clip gradients; False (step must be skipped) if their norm is not finite."""
+        if self.max_grad_norm is None:
+            return True
+        params = [p for g in self.optimizer.param_groups for p in g["params"] if p.grad is not None]
+        norm = torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
+        if torch.isfinite(norm):
+            return True
+        self.metrics.skipped_batches += 1
+        log.warning("skipped optimizer step: non-finite gradient norm")
+        return False
 
     def _scheduler_step(self) -> None:
         if self.scheduler is not None:

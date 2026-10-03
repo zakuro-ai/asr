@@ -146,3 +146,45 @@ def test_a_failing_callback_does_not_kill_training(tmp_path, label_csv, audio_co
 
     t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, callbacks=CB())
     assert len(t.run(*_loaders()).history) == 1
+
+
+@pytest.mark.parametrize("runtime", ["vanilla", "sakura"])
+def test_gradient_clipping_keeps_weights_finite_under_an_exploding_lr(
+    tmp_path, label_csv, audio_conf, runtime
+):
+    t = _trainer(
+        tmp_path,
+        label_csv,
+        audio_conf,
+        runtime=runtime,
+        epochs=2,
+        max_grad_norm=1.0,
+        async_eval=False,
+    )
+    for g in t.optimizer.param_groups:
+        g["lr"] = 50.0  # absurd: unclipped Adam on a CTC sum loss blows up
+    t.run(*_loaders())
+    assert all(torch.isfinite(p).all() for p in t.model.parameters())
+
+
+def test_nonfinite_gradients_are_skipped_not_applied(tmp_path, label_csv, audio_conf):
+    t = _trainer(tmp_path, label_csv, audio_conf, runtime="vanilla", epochs=1, max_grad_norm=1.0)
+    before = [p.detach().clone() for p in t.model.parameters()]
+
+    # Poison the gradients directly: after backward every grad is NaN.
+    real_backward = torch.Tensor.backward
+
+    def poisoned(self, *a, **k):
+        real_backward(self, *a, **k)
+        for p in t.model.parameters():
+            if p.grad is not None:
+                p.grad.fill_(float("nan"))
+
+    torch.Tensor.backward = poisoned
+    try:
+        t.run(*_loaders())
+    finally:
+        torch.Tensor.backward = real_backward
+    assert t.metrics.skipped_batches > 0
+    for b, p in zip(before, t.model.parameters()):
+        assert torch.equal(b, p.detach())
