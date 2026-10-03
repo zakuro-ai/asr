@@ -64,3 +64,8 @@ select = ["E", "F", "W", "I"]
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F403"]
 "asr_deepspeech/parsers/default_parser.py" = ["E501"]
+
+# sakura-ml 1.0 is not on PyPI yet; resolve it from the tagged release until it is.
+# (uv-only: the published metadata keeps the plain `sakura-ml>=1.0` requirement.)
+[tool.uv.sources]
+sakura-ml = { git = "https://github.com/zakuro-ai/sakura", tag = "v1.0.0" }
