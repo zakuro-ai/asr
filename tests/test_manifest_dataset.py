@@ -96,13 +96,16 @@ def test_sha256_is_verified_and_corruption_is_refused(shard_root, audio_conf):
         blob_bytes = fh.read(rows[0]["size"])
     rows[0]["sha256"] = hashlib.sha256(blob_bytes).hexdigest()
     ds = ManifestDataset(rows, {c: i for i, c in enumerate("_ ab")}, audio_conf, root=root)
-    ds[0]  # intact: fine
+    spect, _ = ds[0]  # intact: loads
+    assert spect.shape[1] > 0
     shard = root / "audio" / "train-000.tar"
     data = bytearray(shard.read_bytes())
     data[rows[0]["offset"] + 100] ^= 0xFF  # flip one byte inside the clip
     shard.write_bytes(bytes(data))
     with pytest.raises(ValueError, match="do not match"):
-        ds[0]
-    ManifestDataset(
+        _ = ds[0]
+    unverified = ManifestDataset(
         rows, {c: i for i, c in enumerate("_ ab")}, audio_conf, root=root, verify=False
-    )[0]
+    )
+    spect, _ = unverified[0]  # verification off: the flipped byte is not noticed
+    assert spect.shape[1] > 0
