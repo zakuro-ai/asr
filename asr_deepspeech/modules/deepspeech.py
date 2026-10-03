@@ -26,7 +26,7 @@ class DeepSpeech(nn.Module):
         self,
         audio_conf,
         decoder,
-        label_path,
+        label_path=None,
         id="asr",
         rnn_type="nn.LSTM",
         rnn_hidden_size=768,
@@ -36,6 +36,7 @@ class DeepSpeech(nn.Module):
         version="0.0.1",
         model_path=None,
         restart_from=None,
+        labels=None,
     ):
         super(DeepSpeech, self).__init__()
         self.version = version
@@ -45,14 +46,29 @@ class DeepSpeech(nn.Module):
         self.rnn_hidden_size = rnn_hidden_size
         self.rnn_hidden_layers = rnn_hidden_layers
         self.rnn_type = resolve_rnn_type(rnn_type)
-        self.labels = dict([(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()])
+        if labels is not None:
+            # An explicit alphabet (blank first). The CSV route cannot represent a space:
+            # pandas drops a whitespace-only row, silently shrinking the output layer.
+            self.labels = {c: i for i, c in enumerate(labels)}
+            if len(self.labels) != len(labels):
+                raise ValueError("labels must be unique characters")
+        else:
+            if label_path is None:
+                raise ValueError("DeepSpeech needs either `labels` or `label_path`")
+            self.labels = dict(
+                [(v, k) for k, v in pd.read_csv(label_path).to_dict()["label"].items()]
+            )
         self.bidirectional = bidirectional
         self.sample_rate = self.audio_conf.sample_rate
         self.window_size = self.audio_conf.window_size
         self.num_classes = len(self.labels)
         self.model_path = model_path
         self.build_network()
-        self.decoder = GreedyDecoder(self.labels)
+        # the decoder wants the alphabet as a sequence ordered by class index (it calls
+        # ``.index(' ')`` on it), not the char -> index dict
+        self.decoder = GreedyDecoder(
+            [c for c, _ in sorted(self.labels.items(), key=lambda kv: kv[1])]
+        )
         # hub.restart_from(self, restart_from)
 
     def build_network(self):

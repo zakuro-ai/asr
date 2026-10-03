@@ -81,7 +81,7 @@ def test_dataset_item_and_loader_batch(shard_root, audio_conf):
     spect, target = ds[1]
     assert spect.shape[0] == 161 and spect.shape[1] > 0
     assert target == [labels[c] for c in "ba ab"]
-    loader, _ = manifest_loader(ds, batch_size=2)
+    loader, _ = manifest_loader(ds, batch_size=2, shuffle=False)
     inputs, targets, pct, tsizes = next(iter(loader))
     assert inputs.shape[0] == 2 and inputs.shape[1] == 1 and inputs.shape[2] == 161
     assert int(tsizes.sum()) == len(targets)
