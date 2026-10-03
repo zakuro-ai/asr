@@ -38,40 +38,56 @@ A pretrained Japanese model reaches `CER = 34` on the JSUT test set.
 * **Fewer silent failures.** Invalid-loss batches are counted and logged, a run where *every*
   batch is invalid aborts, failed asynchronous evaluations are reported, and the import-time global
   RNG seeding is gone (use `seed:` in the config).
-* **Reproducible benchmark** (`benchmarks/run.py`) with committed results, see below.
+* **Time-to-performance benchmark** (`benchmarks/ttp.py`) with committed results, see below.
 * Breaking: Python >= 3.10, `sakura-ml>=1.0`, the unused `zakuro-ai` dependency is dropped and the
   trainer constructor changed (see [CHANGELOG](CHANGELOG.md)).
 
-# Benchmark
+# Benchmark: time to performance
 
-`python benchmarks/run.py` trains the same DeepSpeech2 (GRU 3x512) on deterministic synthetic
-spectrograms with the same seed, varying only the runtime:
+Epoch time is the wrong metric once evaluation and checkpoints can be overlapped or throttled.
+What matters is **how soon a model of the required quality exists and is known to exist**.
+`benchmarks/ttp.py` trains the same DeepSpeech2 (GRU 3x512) on a learnable synthetic task
+(each character is a spectral prototype plus noise) with the same seed, and stops the first time a
+*resolved* evaluation reaches the target CER, so the measured time includes evaluation lag.
 
 | arm | what runs |
 |---|---|
-| `vanilla` | synchronous evaluation and checkpoint writes, hand-rolled GradScaler (0.4 behaviour) |
-| `sakura-sync` | Sakura runtime, async checkpoint, synchronous evaluation |
-| `sakura-async` | Sakura runtime, adaptive async evaluation + async checkpoint |
+| `legacy` | the 0.4 loop: synchronous evaluation, the best model is written only when it improves |
+| `vanilla+ckpt` | the same loop plus a resume checkpoint after every epoch (what a crash-safe run needs) |
+| `sakura-thread` | Sakura runtime; evaluation and checkpoint writes on background threads |
+| `sakura-process` | Sakura runtime; background work in a worker process (shared-memory tensor hand-off) |
+| `sakura-process-30s` | as above, resume checkpoints at most every 30 s (`checkpoint_every_s`) |
 
-RTX 2080 Ti, torch 2.14.1+cu130, fp16 autocast, 10 epochs (raw JSON in `benchmarks/results/`):
+RTX 2080 Ti on a shared host, torch 2.14.1+cu130, fp16, target CER 15, seed 0
+(`benchmarks/results/ttp-long.json`; a 44-epoch run):
 
-| workload | vanilla | sakura-sync | sakura-async | best CER |
-|---|---:|---:|---:|---|
-| 512 train / 512 eval utterances | 37.0 s | 36.0 s (1.03x) | **33.9 s (1.09x)** | 92.87 for all arms |
-| 512 train / 2048 eval utterances | 57.8 s | 54.8 s (1.05x) | 55.6 s (1.04x) | 92.50 / 92.55 / 92.55 |
+| arm | time to CER 15 | vs `vanilla+ckpt` | vs `legacy` | mean epoch |
+|---|---:|---:|---:|---:|
+| `legacy` | 104.0 s | 1.80x | 1.00x | 2.37 s |
+| `vanilla+ckpt` | 186.9 s | 1.00x | 0.56x | 4.33 s |
+| `sakura-process` | 102.0 s | 1.83x | 1.02x | 2.29 s |
+| `sakura-process-30s` | 98.1 s | **1.91x** | **1.06x** | 2.22 s |
 
-How to read this honestly:
+Short runs (about 10-14 epochs, 3 seeds, `ttp-short-seed*.json`), median time to target:
+`legacy` 25 s, `vanilla+ckpt` 49 s, `sakura-thread` 39 s, `sakura-process` 42 s, `sakura-process-30s` 29 s.
 
-* The gain is **modest (4-9%)** and, with one run per arm, partly within run-to-run noise
-  (about +/-3% between epochs). Error rates match: Sakura changes *when* work happens, not what.
-* Evaluation is overlapped on a thread, so the part of `DeepSpeech.__call__` that is plain
-  Python (greedy decoding, Levenshtein) still competes for the GIL with the training loop.
-  Moving evaluation to a Sakura worker process is the obvious next step and is not done yet.
-* The final epoch can never overlap its own evaluation, so short runs under-sell the effect.
-* The data is synthetic, so CER stays near chance; this benchmark measures throughput, not
-  accuracy. A CPU run on a shared laptop was too noisy to report and is deliberately not included.
+What this does and does not show:
 
-Reproduce: `python benchmarks/run.py --epochs 10 --device cuda --train-size 512 --eval-size 512 --batch-size 32 --hidden 512 --layers 3`.
+* **Crash safety is expensive in a synchronous loop** (+80% wall-clock for a per-epoch resume
+  checkpoint) and **Sakura makes it nearly free**: about 1.8-1.9x faster than the safe synchronous
+  loop to the same quality.
+* **It is not faster than the old unsafe loop.** Against `legacy` it is on par (1.02-1.06x in the
+  long run, 0.5-1.07x across short runs). `legacy` simply writes nothing but the best model.
+* **Threads lose to a worker process.** Checkpoint serialisation in a thread competes for the GIL
+  with the launch-bound training loop (training epochs became 2.4x slower in a profile), which
+  cancels the overlap.
+* **Fixed costs show on short runs:** about half a second of worker start-up, and evaluation lags
+  training by one epoch. The shared host also makes single runs noisy (a seed's arms differ by up to
+  2x); treat the short-run table as indicative and the long run as the reference.
+* The task is synthetic, so this measures systems behaviour, not accuracy.
+
+Reproduce: `python benchmarks/ttp.py --device cuda --target 15 --max-epochs 120 --noise 4.0 --lr 3e-5 --train-size 512 --eval-size 1024`.
+`python benchmarks/run.py` is the earlier epoch-throughput benchmark (random targets).
 
 # Installation
 
