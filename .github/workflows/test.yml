@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write  # a failed job cancels the rest of the run
 
 concurrency:
   group: test-${{ github.ref }}
@@ -29,6 +30,10 @@ jobs:
         run: |
           uv tool run ruff check .
           uv tool run ruff format --check .
+      # Last step on purpose, after this job's own uploads: see the action.
+      - name: Cancel the rest of the run
+        if: failure()
+        uses: ./.github/actions/cancel-run-on-failure
 
   test:
     runs-on: ubuntu-latest
@@ -56,3 +61,7 @@ jobs:
 
       - name: Run tests
         run: uv run python -m pytest tests/ -v --tb=short --cov=asr_deepspeech --cov-report=term-missing --cov-fail-under=50
+      # Last step on purpose, after this job's own uploads: see the action.
+      - name: Cancel the rest of the run
+        if: failure()
+        uses: ./.github/actions/cancel-run-on-failure
