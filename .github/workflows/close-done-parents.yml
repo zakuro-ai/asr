@@ -1,0 +1,113 @@
+name: close-done-parents
+
+# Closes a parent issue (epic, ADR, tracking issue) as soon as all its
+# sub-issues are closed, with a comment saying why. A parent with no
+# sub-issues is never touched. Vendored unchanged in every zakuro-ai repo.
+#
+# - issue closed: walk up the parent chain (a close made with the workflow
+#   token fires no new run, so one run climbs every level).
+# - daily sweep: every open parent in this repo, which catches parents whose
+#   last sub-issue closed in another repo, or was moved out.
+#
+# Parents in other repos are closed when GH_TOKEN can write there; otherwise
+# the run warns and that repo's own daily sweep closes them.
+#
+# curl + jq only: the self-hosted ARC image has no `gh`. Public repos cannot
+# use the self-hosted runner group, so they run on GitHub-hosted runners.
+on:
+  issues:
+    types: [closed]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: close-done-parents
+  cancel-in-progress: false
+
+jobs:
+  close-done-parents:
+    runs-on: ${{ github.event.repository.private && 'cpu' || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - name: Close parents whose sub-issues are all closed
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_PAT || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          # gql <query> <variables-json>: prints .data, fails on any error.
+          gql() {
+            local out
+            out="$(jq -n --arg q "$1" --argjson v "$2" '{query: $q, variables: $v}' |
+              curl -fsS --retry 3 -X POST https://api.github.com/graphql \
+                -H "Authorization: bearer ${GH_TOKEN}" -H "Content-Type: application/json" -d @-)"
+            if jq -e '.errors' <<<"$out" >/dev/null; then
+              jq -c '.errors' <<<"$out" >&2
+              return 1
+            fi
+            jq -c '.data' <<<"$out"
+          }
+
+          parent_of() {
+            gql 'query($id: ID!) { node(id: $id) { ... on Issue { parent { id } } } }' \
+              "$(jq -n --arg id "$1" '{id: $id}')" | jq -r '.node.parent.id // empty'
+          }
+
+          # Close $1 when all its sub-issues are closed. Succeeds only when it was closed.
+          close_if_done() {
+            local id="$1" info ref total body
+            info="$(gql 'query($id: ID!) { node(id: $id) { ... on Issue {
+                state number repository { nameWithOwner } subIssuesSummary { total completed } } } }' \
+              "$(jq -n --arg id "$id" '{id: $id}')")" || return 1
+            jq -e '.node | .state == "OPEN" and .subIssuesSummary.total > 0
+                   and .subIssuesSummary.completed == .subIssuesSummary.total' <<<"$info" >/dev/null || return 1
+            ref="$(jq -r '.node | "\(.repository.nameWithOwner)#\(.number)"' <<<"$info")"
+            total="$(jq -r '.node.subIssuesSummary.total' <<<"$info")"
+            body="All ${total} sub-issues are closed, so this closes automatically ([run](${RUN_URL}))."
+            if gql 'mutation($id: ID!, $body: String!) {
+                addComment(input: {subjectId: $id, body: $body}) { clientMutationId }
+                closeIssue(input: {issueId: $id, stateReason: COMPLETED}) { clientMutationId } }' \
+                "$(jq -n --arg id "$id" --arg body "$body" '{id: $id, body: $body}')" >/dev/null; then
+              echo "closed ${ref} (${total}/${total} sub-issues closed)"
+            else
+              echo "::warning::could not close ${ref}: all ${total} sub-issues are closed, but this token cannot write there"
+              return 1
+            fi
+          }
+
+          climb() {
+            local id="$1"
+            while id="$(parent_of "$id")" && [ -n "$id" ]; do
+              close_if_done "$id" || break
+            done
+          }
+
+          if [ "$EVENT" = issues ]; then
+            climb "$ISSUE_NODE_ID"
+            exit 0
+          fi
+
+          cursor=null
+          while :; do
+            page="$(gql 'query($owner: String!, $name: String!, $after: String) {
+                repository(owner: $owner, name: $name) {
+                  issues(states: OPEN, first: 100, after: $after) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes { id subIssuesSummary { total completed } } } } }' \
+              "$(jq -n --arg r "$GITHUB_REPOSITORY" --argjson after "$cursor" \
+                  '{owner: ($r | split("/")[0]), name: ($r | split("/")[1]), after: $after}')")"
+            for id in $(jq -r '.repository.issues.nodes[]
+                | select(.subIssuesSummary.total > 0 and .subIssuesSummary.completed == .subIssuesSummary.total)
+                | .id' <<<"$page"); do
+              if close_if_done "$id"; then climb "$id"; fi
+            done
+            jq -e '.repository.issues.pageInfo.hasNextPage' <<<"$page" >/dev/null || break
+            cursor="$(jq -c '.repository.issues.pageInfo.endCursor' <<<"$page")"
+          done
