@@ -1,0 +1,76 @@
+name: cancel-run-on-failure
+description: >-
+  Fail fast across jobs. `strategy.fail-fast` only reaches the other legs of
+  one matrix; when one job goes red, every other job of the run otherwise
+  keeps its runner to the end on a commit that is already red. Run this as the
+  LAST step of a job with `if: failure()`, after the job's own artifact and
+  log uploads, and it cancels the whole workflow run.
+
+  A job named in `keep-running` that has not finished holds the cancel back
+  (a deploy, publish or tag job running next to the checks must never be cut
+  off half-way). The step waits for it up to `wait-minutes`, then gives up and
+  leaves the run alone. Jobs with `if: always()` still run after the cancel.
+
+  Same action in every zakuro-ai repo (first: zak-marketplace#773). Plain
+  python3 (`python` on Windows), not `gh`: self-hosted images lack the gh
+  CLI. Never fails the job itself: a token that cannot cancel (a fork PR's
+  read-only token, a missing `actions: write`) only logs a warning.
+inputs:
+  keep-running:
+    description: >-
+      Job names, one per line, as the run displays them (a `name:` or a
+      reusable workflow's `caller / job`), whose unfinished run holds the cancel back
+    default: ""
+  wait-minutes:
+    description: How long to wait for those jobs before giving up on the cancel
+    default: "10"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEEP_RUNNING: ${{ inputs.keep-running }}
+        WAIT_MINUTES: ${{ inputs.wait-minutes }}
+      run: |
+        PY=$(command -v python3 || command -v python) || { echo "::warning::no python; not cancelling the run"; exit 0; }
+        "$PY" - <<'PY'
+        import json, os, time, urllib.error, urllib.request
+
+        api = os.environ["GITHUB_API_URL"]
+        run = f"{api}/repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+        attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+        keep = {n.strip() for n in os.environ["KEEP_RUNNING"].splitlines() if n.strip()}
+        headers = {
+            "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+            "Accept": "application/vnd.github+json",
+        }
+
+        def request(url, method="GET"):
+            req = urllib.request.Request(url, method=method, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read()
+                return json.loads(body) if body else None
+
+        def busy():
+            names, page = [], 1
+            while True:
+                jobs = request(f"{run}/attempts/{attempt}/jobs?per_page=100&page={page}")["jobs"]
+                names += [j["name"] for j in jobs if j["name"] in keep and j["status"] != "completed"]
+                if len(jobs) < 100:
+                    return names
+                page += 1
+
+        try:
+            deadline = time.time() + 60 * float(os.environ["WAIT_MINUTES"])
+            while (waiting := busy()) and time.time() < deadline:
+                print(f"waiting for {', '.join(waiting)} before cancelling the run")
+                time.sleep(20)
+            if waiting:
+                print(f"::warning::{', '.join(waiting)} still running; not cancelling the rest of the suite.")
+            else:
+                print("::error::This job failed; cancelling the rest of the run.")
+                request(f"{run}/cancel", method="POST")
+        except (urllib.error.URLError, OSError, KeyError, ValueError) as exc:
+            print(f"::warning::could not cancel the run: {exc}")
+        PY
